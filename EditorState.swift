@@ -173,7 +173,7 @@ final class EditorState: ObservableObject {
     @Published var modifySlideID: NoteID? = nil      // Slide modify で編集中のスライド (選ぶと selectedIDs もそのスライドだけになる)
     @Published var modifySegIndex: Int? = nil        // Slide modify で掴んでいる点 (seg)。ドラッグ中だけ入る (白い輪で目印を出す)
     @Published var popup: EditPopup = .none
-    @Published var gridLines = 16
+    @Published var gridLines = 32
     @Published var gridAlign = true
     @Published var widthUnits = 64
     @Published var lassoPoints: [CGPoint] = []       // LASSO でなぞっている途中の線 (レーン内の画面座標。指を離したら空に戻る)
