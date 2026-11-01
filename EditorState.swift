@@ -253,6 +253,15 @@ final class EditorState: ObservableObject {
         didSet { UserDefaults.standard.set(gridCenterAlign, forKey: "editor.gridCenterAlign") }
     }
 
+    // ノーツの端 (幅の半分) が、レーン (x: 0...255) の外へはみ出すのを許可するか。次回起動時も保存される。初期値はオフ
+    //   オン: 以前の動き。制限は「ノーツの中心が 0...255 の外に出ない」ことだけ。端は外へはみ出してよい
+    //   オフ: ノーツの端もレーンの外枠から出さない (置く / 動かす / 幅を変える / seg を置く・動かす)。
+    //         Grid align がオンのときも、端が外枠を越えてしまうグリッド線には中心を合わせず、端が外枠ぴったりの位置に止める
+    //         (中心のグリッド吸着より、端を外枠に合わせることを優先する。端が収まるときは、今までどおり中心をグリッドに合わせる)
+    @Published var allowNoteOverflow = false {
+        didSet { UserDefaults.standard.set(allowNoteOverflow, forKey: "editor.allowNoteOverflow") }
+    }
+
     // Slide modify で seg を動かすとき、縦 (時間) 方向にも動かせるようにするか。次回起動時も保存される。初期値はオフ (本家と同じ)
     //   オフ: seg は横 (x) にだけ動く。拍 (時間) は掴んだ時のまま
     //   オン: 縦にも動く (1/n 拍に吸着)
@@ -409,6 +418,7 @@ final class EditorState: ObservableObject {
         if let v = ud.object(forKey: "editor.allowSegVerticalMove") as? Bool { self.allowSegVerticalMove = v }
         if let v = ud.object(forKey: "editor.snapViewToLFB") as? Bool { self.snapViewToLFB = v }
         if let v = ud.object(forKey: "editor.gridCenterAlign") as? Bool { self.gridCenterAlign = v }
+        if let v = ud.object(forKey: "editor.allowNoteOverflow") as? Bool { self.allowNoteOverflow = v }
         if let v = ud.object(forKey: "editor.holdDeselectSec") as? Double {
             self.holdDeselectSec = min(max(v, Self.holdRange.lowerBound), Self.holdRange.upperBound)
         }

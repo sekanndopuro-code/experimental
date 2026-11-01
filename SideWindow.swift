@@ -730,7 +730,7 @@ private struct SettingWindowContent: View {
         }
     }
 
-    /// チェックボックス 5 つ
+    /// チェックボックス 6 つ
     private var checkRows: some View {
         VStack(alignment: .leading, spacing: 16) {
             checkRow(title: "立ち上がりをはっきりさせる (伸ばす窓を小さく)",
@@ -754,6 +754,12 @@ private struct SettingWindowContent: View {
             checkRow(title: "grid alignがオンの時、グリッド上に常にノーツの中心を合わせる",
                      note: "オンのとき (初期値・本家と同じ): ノーツを動かすと、動かした先でいちばん近いグリッド線に中心が吸着します。置いたときと同じ座標になるので、グリッドに乗っていないノーツを動かして、置いたノーツに重ねても中心が必ずそろいます。スライドは始点と各 seg の中心がそれぞれ吸着します。オフにすると、動かす前の位置から「グリッド1マスの整数倍」だけずらす固定変位になります。",
                      isOn: $state.gridCenterAlign)
+
+            SideDivider()
+
+            checkRow(title: "レーンからノーツをはみ出せる",
+                     note: "オフのとき (初期値): ノーツの端がレーンの外枠から出ないようになります。置く・動かす・幅を変える・seg を置く / 動かすのすべてが対象です。Grid align がオンのときも、端が外枠を越えるグリッド線には中心を合わせず、端が外枠ぴったりになる位置に止まります (端が収まるときは、今までどおり中心がグリッド線に合います)。オンにすると、ノーツの中心がレーンの中にあればよく、端は外へはみ出せます (以前の動き)。プラグインが置くノーツや、すでにはみ出している譜面は変わりません。",
+                     isOn: $state.allowNoteOverflow)
 
             SideDivider()
 

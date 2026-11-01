@@ -14,7 +14,9 @@ extension EditorState {
     /// グリッド有効時 (本家と同じ): 幅は 1マスの整数倍 (255 が割り切れない分は四捨五入)。
     /// **ノーツの中心** を、いちばん近いグリッド線に合わせる。幅が偶数マスなら両端もグリッド線の上に来るが、
     /// 奇数マス (例: 32 Grid で 7マス) のときは、両端がマスの半分ずれる (中心がグリッド線の上、が本家の動き)。
-    /// 制限は「**中心** が 0...255 の外に出ない」ことだけ。ノーツの端 (幅の半分) はレーンからはみ出してよい
+    /// SETTING の「レーンからノーツをはみ出せる」(allowNoteOverflow) がオン: 制限は「**中心** が 0...255 の外に出ない」ことだけ。ノーツの端 (幅の半分) はレーンからはみ出してよい。
+    /// オフ (初期値): ノーツの端もレーンの外枠から出さない。Grid align がオンでも、端が外枠を越えるときは
+    ///   中心のグリッド吸着をやめて、端が外枠ぴったりになる位置に止める (端が収まるときは、今までどおり中心をグリッドに合わせる)
     func snapNote(centerX: Double, widthUnits wu: Int) -> (x: Int, w: Int) {
         if gridAlign && gridLines >= 1 {
             let n = gridLines
@@ -23,12 +25,53 @@ extension EditorState {
             let w = max(1, Int((cell * Double(cells)).rounded()))
             // 中心にできるグリッド線は j = 0 ... n (番号は左端の線が 0)。幅は関係ない
             let j = max(0, min(n, Int((centerX / cell).rounded())))
-            return (Int((cell * Double(j)).rounded()), w)
+            return (laneFitted(Int((cell * Double(j)).rounded()), width: w), w)
         } else {
             let w = max(1, min(255, wu))
             let cx = max(0, min(255, Int(centerX.rounded())))
-            return (cx, w)
+            return (laneFitted(cx, width: w), w)
         }
+    }
+
+    /// 幅 w のノーツの端がレーン (0...255) に収まる、中心 x の範囲。端が外枠ぴったりになる位置が両端
+    /// (幅が奇数のときは、整数の x では半分ずれるので、内側に寄せる側へ丸める。幅 255 だけは収まる位置が無いので 127...128)
+    func laneCenterRange(width w: Int) -> ClosedRange<Int> {
+        let lo = (max(1, min(255, w)) + 1) / 2          // ceil(w / 2)
+        let hi = 255 - lo
+        return lo <= hi ? lo...hi : hi...lo
+    }
+
+    /// 「はみ出せる」がオフのとき、中心 x を、端がレーンに収まる範囲へ止める。オンのときは何もしない
+    func laneFitted(_ x: Int, width w: Int) -> Int {
+        if allowNoteOverflow { return x }
+        let r = laneCenterRange(width: w)
+        return max(r.lowerBound, min(r.upperBound, x))
+    }
+
+    /// 始点の x (head) を、すべての点 (始点と seg。始点からの相対 x の範囲が relMin...relMax) の端がレーンに収まる範囲へ止める。
+    /// origHead を渡すと、もともと範囲の外にあった側は、その位置まで (これ以上外へは行かせない) 許す。nil なら厳密に収める
+    func laneFittedHead(_ head: Int, width w: Int, relMin: Int, relMax: Int, origHead: Int?) -> Int {
+        let r = laneCenterRange(width: w)
+        var minAbs = r.lowerBound               // 点の中心として許される左端 / 右端
+        var maxAbs = r.upperBound
+        if let o = origHead {
+            minAbs = min(minAbs, o + relMin)
+            maxAbs = max(maxAbs, o + relMax)
+        }
+        let lo = minAbs - relMin
+        let hi = maxAbs - relMax
+        return max(lo, min(hi, head))
+    }
+
+    /// ノーツ (スライドなら seg を含む) の、始点からの相対 x の範囲
+    private func segSpan(of n: Note) -> (min: Int, max: Int) {
+        var lo = 0
+        var hi = 0
+        for s in n.segs {
+            lo = min(lo, s.x)
+            hi = max(hi, s.x)
+        }
+        return (lo, hi)
     }
 
     /// グリッド線 j 番 (左端の線が 0) の x 座標。snapNote で「置く」ときと同じ丸め方 (置いた座標と動かした座標が、必ず同じ値になる)
@@ -276,8 +319,10 @@ extension EditorState {
                 minX = min(minX, sx)
                 maxX = max(maxX, sx)
             }
-            left = min(left, Double(minX))      // ノーツの端ではなく、中心 (始点・seg の点) で数える
-            right = max(right, Double(maxX))
+            // 「はみ出せる」がオンなら、ノーツの端ではなく中心 (始点・seg の点) で数える。オフなら、ノーツの端 (中心 ± 幅の半分) で数える
+            let half = allowNoteOverflow ? 0.0 : Double(n.w) / 2.0
+            left = min(left, Double(minX) - half)
+            right = max(right, Double(maxX) + half)
         }
         moveTargets = targets
         moveAnchorBeat = anchor
@@ -343,7 +388,11 @@ extension EditorState {
         for t in moveTargets {
             let orig = t.orig
             var head = centeredMoveX(from: orig.x, rawX: rawX, widthUnits: orig.w)
-            if !orig.segs.isEmpty {
+            if !allowNoteOverflow {
+                // はみ出せない設定: 端が外枠を越えるなら、中心のグリッド吸着より端を外枠に合わせることを優先する
+                let span = segSpan(of: orig)
+                head = laneFittedHead(head, width: orig.w, relMin: span.min, relMax: span.max, origHead: orig.x)
+            } else if !orig.segs.isEmpty {
                 head = keepSegsInLane(head: head, orig: orig)
             }
             let newBeat = orig.beat + delta
@@ -475,13 +524,17 @@ extension EditorState {
         widthUndoPushed = false
     }
 
-    /// ノーツの幅を wu にしたノーツを返す (元のノーツは変えない)。
-    /// **位置 (x) と seg は一切動かさない**。幅だけを変える。
-    /// 左右の端が x:0...255 の枠からはみ出してもよい (譜面の表現としてよくある)。制限があるのは「中心が 0...255 の外に出ない」ことだけで、
-    /// 幅を変えても中心は動かないので、ここでは何も止めない
+    /// ノーツの幅を wu にしたノーツを返す (元のノーツは変えない)。seg の相対位置は動かさない。
+    /// 「はみ出せる」がオン: 位置 (x) も動かさない。左右の端が x:0...255 の枠からはみ出してもよい (譜面の表現としてよくある)。
+    /// 「はみ出せる」がオフ: 広げた結果、端がレーンの外へ出るなら、端が外枠ぴったりになるまで始点の x を内側へずらす
+    ///   (元の幅から計算し直すので、幅を戻せば位置も元に戻る)
     private func resized(_ orig: Note, widthUnits wu: Int) -> Note {
         var n = orig
         n.w = snapWidth(wu)
+        if !allowNoteOverflow {
+            let span = segSpan(of: orig)
+            n.x = laneFittedHead(orig.x, width: n.w, relMin: span.min, relMax: span.max, origHead: nil)
+        }
         return n
     }
 
