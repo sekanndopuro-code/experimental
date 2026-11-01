@@ -69,15 +69,14 @@ extension EditorState {
         case .note, .wipe:
             let b = snapBeat(g.beatOf(current.y))
             let p = snapNote(centerX: g.xOf(current.x), widthUnits: widthUnits)
+            // 指を置いている間は何も描かない (半透明のゴーストも出さない)。指を離した時に初めてノーツが置かれる
+            if ghost != nil { ghost = nil }
             if ended {
-                ghost = nil
                 addNote(Note(beat: b, x: p.x, w: p.w, type: tool == .wipe ? 4 : nil))
-            } else {
-                ghost = Ghost(tool: tool, beat: b, x: p.x, w: p.w)
             }
 
         case .slide:
-            // ドラッグは使わない。1点ずつ、指を離した位置に置く (指を置いている間は、置く位置をゴーストで見せる)
+            // ドラッグは使わない。1点ずつ、指を離した位置に置く (指を置いている間は何も描かない)
             //   作成中でないとき: 1回目のタップ = 始点
             //   作成中のとき    : タップするたびに seg を足す (時系列の順でなくてよい)。
             //                     直前に置いた点 (終点) より前の時間 (始点より前 = beat がマイナスも) は、SETTING の「beatが時系列順でないsegを置くのを許可する」がオンのときだけ置ける。
@@ -85,23 +84,18 @@ extension EditorState {
             let b = snapBeat(g.beatOf(current.y))
             if let base = slideDraftBase(), let from = slideDraftLastPoint() {
                 let p = snapNote(centerX: g.xOf(current.x), widthUnits: base.w)
+                if ghost != nil { ghost = nil }   // 指を置いている間は何も描かない。離した時に初めて置く
                 if !allowUnorderedSeg && b < from.beat {
-                    ghost = nil
                     if ended { finishSlide() }
                 } else if ended {
-                    ghost = nil
                     appendDraftSeg(beat: b, x: p.x)
-                } else {
-                    ghost = Ghost(tool: .slide, beat: from.beat, x: from.x, w: base.w, endBeat: b, endX: p.x)
                 }
             } else {
                 let p = snapNote(centerX: g.xOf(current.x), widthUnits: widthUnits)
+                if ghost != nil { ghost = nil }   // 指を置いている間は何も描かない。離した時に初めて置く
                 if ended {
-                    ghost = nil
                     slideDraft = SlideDraft(beat: b, x: p.x, w: p.w)
                     showToast("始点を置きました。続けて seg をタップしてください (終わるときは「完」)")
-                } else {
-                    ghost = Ghost(tool: .slide, beat: b, x: p.x, w: p.w)
                 }
             }
 
