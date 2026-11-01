@@ -830,15 +830,15 @@ extension EditorState {
         return 255 - x
     }
 
-    /// レーンの真ん中 (x=127.5) を軸に左右反転。選択が無いときは全ノーツ。
+    /// レーンの真ん中 (x=127.5) を軸に左右反転。選択中のノーツだけが対象。
+    /// 選択が無いときは何もしない (全ノーツの反転は、大きい譜面で処理落ちするため行わない)。
     /// スライドは、始点と各 seg の中心を1点ずつ反転して、seg の相対 x を入れ直す (グリッド線の上にあった点は、反転後もグリッド線の上)
     func flipHorizontal() {
-        var targets = selectedIndices()
+        let targets = selectedIndices()
         if targets.isEmpty {
-            targets = Array(chart.notes.indices)
-            showToast("ノーツが選択されていないため、全ノーツを反転しました")
+            showToast("ノーツが選択されていません。反転するノーツを選択してください")
+            return
         }
-        if targets.isEmpty { return }
         pushUndo()
         for i in targets {
             let headX = chart.notes[i].x
