@@ -230,7 +230,7 @@ EDIT の右ボタン列、**Order の下・More の上**に **Adv.** (λ) があ
   - ファイルアプリを SwiftUI の `.fileImporter` ではなく UIKit のピッカーで開くのは、外側の画面 (RootView) にも `.fileImporter` があると、内側のものが開かないことがあるため
 - **Undo**: 1回の実行 = Undo 1回分。↶ で実行前に丸ごと戻る
 - **print() の出力**はメニュー下部の「出力」欄に出る。エラーは「ファイル名:行番号: 内容」でダイアログに出る
-- **内蔵プラグイン** (`BuiltinPlugins.swift`): `quad_InOut` / `quad_OutIn` / `Join Slides (Fixed)` (添付された Malody V 用プラグイン) と、editor.html から移植した `終点と始点を繋げる` / `折り返し敷` / `枝分かれ敷` が最初から入っている (結合系は、上の Order ボタンの「順番に選択」を使う)
+- **内蔵プラグイン** (`BuiltinPlugins.swift`): `quad_InOut` / `quad_OutIn` / `Join Slides (Fixed)` (添付された Malody V 用プラグイン。`quad_InOut` / `quad_OutIn` は、置くウィップを**一括で置く**ように直してある。下の「quad_InOut / quad_OutIn の一括配置」) と、editor.html から移植した `終点と始点を繋げる` / `折り返し敷` / `枝分かれ敷` が最初から入っている (結合系は、上の Order ボタンの「順番に選択」を使う)
 - **BetterMalody 用の内蔵プラグイン** (添付された Lua をそのまま収録): `BM Ease effects` (カーソルから scroll を 16 種類のカーブで置く。入力は `scroll, 開始値, 終了値, 長さ(拍), 1拍あたりの点の数`) / `BM Image to holds (img2hold)` (画像を選ぶと、黒い部分を 1 幅のホールド (seg 1 個のスライド) に変える。カーソルの拍から上へ並ぶ。入力は `長さ(拍) 1拍あたりのtick 閾値(0-255) 反転(0/1)`) / `BM Select by filter` (種類・x・幅・拍の条件でノーツを選択。`slide x=10-50 !w=3-4` のように書く)。
   * `hs` (Taiko 用) の effect はこのエディタには無いので、置かずに「未対応」に出す。Taiko / Key 用の指定 (`tap` `long` `lane=` `don` `ka` など) は、Slide の譜面には該当するノーツが無いので何も選ばれない
   * img2hold は、画像を横 256 × 縦 (長さ × tick) に引き伸ばして白黒にする (`DecodeImage`)。細かい画像だと、ホールドの数が多すぎて時間がかかる (メニューの停止で止められる)
@@ -278,6 +278,14 @@ EDIT の右ボタン列、**Remove の下・Adv. の上**に **Order** (①②) 
 - **バグスライド (beat の重複) は常に許す**: このエディタは beat が重複しても描画が崩れないので、境目の自動ずらし (結合順 × 1/8477 拍) も、重複 seg の自動修復 (1/9001 拍ずつ) も行わない (editor.html の「バグスライドを許す」を常に ON にしたのと同じ)。結合のたびに beat が動かず、境目が直角のまま残る
 - 「順番に選択」が1本だけで、ほかに選んだスライドも無いとき (折り返し敷・枝分かれ敷) は、何もせず、選び方を表示する。元の editor.html にあった「1本だけでバグ修復」は、重複を常に許すようにしたので無くなった
 - 「終点と始点を繋げる」「折り返し敷」のロジックは editor.html の `mergeSequentialInto` / `mergeJoinInto` と補助関数を1対1で移植したもの (枝分かれ敷は、上の新しい仕様で作り直したので、editor.html の `mergeBranchesInto` とは結果が変わる)。元の関数を (`allowDupBeat = true` で) そのまま実行した結果と、ランダムな譜面 1800 通り (順番なし / 1本 + 装飾 / 手動の3パターン) で出力が完全に一致することを確認している (`lua-engine-src/test_html_diff.js`)
+
+### quad_InOut / quad_OutIn の一括配置
+選んだウィップの間に、2次のイージング (In / Out を交互) でウィップを敷き詰めるプラグイン。ウィップの数が多いと (数千個になる)、実行に何分も掛かっていた。
+- **遅かった理由**: 置くウィップ 1個につき `AddNote` → `SetNoteBeat` → `SetNoteX` → `SetNoteWidth` の 4回、Lua とメインスレッドのやり取りがあり、そのたびに譜面の配列が書き換わって画面が描き直されていた (ウィップが 5000 個なら 約 2万回)
+- **今は**: 置くウィップを全部決めてから、**1回のやり取りで一括して置く** (枝分かれ敷などの「一括」と同じ考え方)。選んだウィップの beat / x / 幅も、1個につき 1回だけ読む。**出来上がる譜面は以前と同じ** (beat・x・幅・個数・並び順・メッセージ。選んだウィップが 2〜60 個のランダムな譜面 112 通りで、以前の版と完全に一致することを確認している。ウィップ 100 個を選んだ例で、やり取りは 約 1万9千回 → 約 400 回)
+- **入口**: `PluginBridge.swift` の `bulkWipes` / `addWipesMain`。`bulkHoldsTag` と同じ「通り道」で、`Editor:GetUserInput(PluginBridge.bulkWipesTag, "整数部,分子,分母,x,幅,…")` (見出しが `@@MSE_ADD_WIPES@@` で始まるとき) は、ダイアログを出さずにウィップを一括で置く。1個ぶんは 5つの数 (beat は `[整数部, 分子, 分母]`、x は 0〜255、幅は 1〜255 に収める。beat が負なら 0 拍)。答えは `"ok <置いた数>"` で、5つずつに割り切れないなど読めない入力は、何も置かずに nil。**`LuaEngineSource.swift` (自動生成) は変えていない**ので、作り直しは要らない
+- **本物の Malody V では**: `GetUserInput` が入力欄を出してしまうので、このエディタ独自の API (`Editor.GetOrderNotes`) があるときだけ一括で置く。無い環境や、一括が失敗したときは、従来どおり 1個ずつ置く (置く前に失敗するので、二重には置かれない)
+- Undo は、今までどおり 1回の実行 = 1回分
 
 ### 仕組み
 Swift Playgrounds のアプリには Lua 本体 (C 言語) を組み込めないため、**Lua → JavaScript の変換器と Lua 標準ライブラリを JavaScript で書き、iOS 標準の JavaScriptCore で動かしている** (`LuaEngineSource.swift`)。

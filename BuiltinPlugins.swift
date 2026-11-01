@@ -2,7 +2,10 @@ import Foundation
 
 // ============================================================
 // アプリに内蔵しているプラグイン。
-//   ・quad_InOut / quad_OutIn / join_slides_fixed: 添付された Malody V 用 Lua プラグインをそのまま収録
+//   ・join_slides_fixed: 添付された Malody V 用 Lua プラグインをそのまま収録
+//   ・quad_InOut / quad_OutIn: 添付された Malody V 用 Lua プラグインが元。ウィップを 1個ずつ置くと (ノーツ 1個につき 4回のやり取り)
+//     何分も掛かるので、置くウィップを全部決めてから、PluginBridge.bulkWipesTag (GetUserInput の通り道) で 1回で置く
+//     (本物の Malody V など、この入口が無い環境では、従来どおり 1個ずつ置く。出来上がる譜面はどちらも同じ)
 //   ・bm_ease / bm_img2hold / bm_select: 添付された BetterMalody 用 Lua プラグイン (ease effects / 画像から hold / 条件で選択) をそのまま収録
 //     (GetUserOption / ReadBytesSelect / DecodeImage / ChartInfo / ClearSelection を使う。PluginBridge / LuaEngineSource に実装)
 //   ・join_end_to_start / fold_join / branch_join: editor.html の「終点と始点を繋げる」「折り返し敷」「枝分かれ敷」を Lua にしたもの
@@ -25,6 +28,9 @@ enum BuiltinPlugins {
 --Modified2: BEAT_DENOM=1048576 + 同一beatタイミングのX平均マージ
 --Modified3: 区間内で 1/128beat 未満の間隔になるsegを間引く(貪欲フィルタ)
 --Modified4: wipefill と同じ視覚曲線になるよう "inverse easing" 化 (X-driven, time-smooth)
+--Modified5: 置くウィップを全部決めてから、このエディタでは 1 回のやり取りで一括して置く
+--            (以前は 1個ずつ AddNote / SetNoteBeat / SetNoteX / SetNoteWidth していて、ノーツが多いと何分も掛かった)。
+--            選んだウィップの beat / x / 幅も、1個につき 1回だけ読む。出来上がる譜面は以前と同じ
 
 PluginName='quad_InOut'
 PluginMode=7
@@ -82,6 +88,47 @@ local function valueToBeat(val,template)
 	return template
 end
 
+-- ====================================================================
+-- ウィップを置く部分 (このエディタ独自の一括の入口。PluginBridge.bulkWipesTag)
+--   1個ずつ AddNote / SetNoteBeat / SetNoteX / SetNoteWidth を呼ぶと、ノーツ 1個につき 4回もやり取りが要るので、
+--   ノーツが多いと何分も掛かる。このエディタでは、置くウィップを全部まとめて 1回で渡す (枝分かれ敷などと同じ「一括」)。
+--   本物の Malody V では GetUserInput が入力欄を出してしまうので、このエディタ独自の API (GetOrderNotes) があるときだけ使う。
+--   使えない環境・失敗したときは、従来どおり 1個ずつ置く。
+-- ====================================================================
+local BULK_WIPES_TAG='@@MSE_ADD_WIPES@@'
+
+-- places: {beat=整数部, numor=分子, x=, w=} の表。全部置けたら true。使えない / 失敗のときは、何も置かずに false
+local function addWipesBulk(places)
+	if Editor.GetOrderNotes==nil then return false end
+	if #places==0 then return true end
+	local flat={}
+	local k=0
+	for i=1,#places do
+		local p=places[i]
+		flat[k+1]=p.beat
+		flat[k+2]=p.numor
+		flat[k+3]=BEAT_DENOM
+		flat[k+4]=p.x
+		flat[k+5]=p.w
+		k=k+5
+	end
+	local ok,answer=pcall(function()
+		return Editor:GetUserInput(BULK_WIPES_TAG,table.concat(flat,','))
+	end)
+	return ok and type(answer)=='string' and string.sub(answer,1,2)=='ok'
+end
+
+-- 従来の置き方 (1個ずつ)
+local function addWipesOneByOne(places)
+	for i=1,#places do
+		local p=places[i]
+		local id=Editor:AddNote(wipe)
+		Editor:SetNoteBeat(id,{beat=p.beat,numor=p.numor,denom=BEAT_DENOM},true)
+		Editor:SetNoteX(id,p.x)
+		Editor:SetNoteWidth(id,p.w)
+	end
+end
+
 function Run()
 
 	local Notes=Editor:GetSelectNotes()
@@ -97,6 +144,9 @@ function Run()
 		list[#list+1]={
 			note=n,
 			time=Editor:GetNoteTime(n,true),
+			beat=Editor:GetNoteBeat(n,true),
+			x=Editor:GetNoteX(n),
+			width=Editor:GetNoteWidth(n),
 		}
 	end
 
@@ -131,8 +181,7 @@ function Run()
 	end
 
 	for i=1,#list do
-		local n=list[i].note
-		local b=Editor:GetNoteBeat(n,true)
+		local b=list[i].beat
 		local key=b.beat*(BEAT_DENOM+1)+b.numor
 		if index[key]==nil then
 			buffer[#buffer+1]={
@@ -151,17 +200,17 @@ function Run()
 	end
 
 	for s=1,segCount do
-		local startNote=list[s].note
-		local endNote  =list[s+1].note
+		local startItem=list[s]
+		local endItem  =list[s+1]
 
-		local startBeat=Editor:GetNoteBeat(startNote,true)
-		local endBeat  =Editor:GetNoteBeat(endNote,true)
+		local startBeat=startItem.beat
+		local endBeat  =endItem.beat
 
-		local startX=Editor:GetNoteX(startNote)
-		local endX  =Editor:GetNoteX(endNote)
+		local startX=startItem.x
+		local endX  =endItem.x
 
-		local startWidth=Editor:GetNoteWidth(startNote)
-		local endWidth  =Editor:GetNoteWidth(endNote)
+		local startWidth=startItem.width
+		local endWidth  =endItem.width
 
 		local dx=endX-startX
 
@@ -215,6 +264,9 @@ function Run()
 	local mergedCount=0
 	local droppedByEndpoint=0
 
+	-- 置くウィップを、先に全部決める
+	local places={}
+
 	for _,e in ipairs(buffer) do
 		if e.isEndpoint then
 			if e.cnt>0 then
@@ -228,13 +280,13 @@ function Run()
 			local avgW=math.floor(e.wSum/e.cnt+0.5)
 			if avgW<1 then avgW=1 end
 
-			local beat={beat=e.beatInt,numor=e.numor,denom=BEAT_DENOM}
-
-			local id=Editor:AddNote(wipe)
-			Editor:SetNoteBeat(id,beat,true)
-			Editor:SetNoteX(id,avgX)
-			Editor:SetNoteWidth(id,avgW)
+			places[#places+1]={beat=e.beatInt,numor=e.numor,x=avgX,w=avgW}
 		end
+	end
+
+	-- このエディタでは 1回で一括して置く。使えない / 失敗のときは、従来どおり 1個ずつ置く
+	if not addWipesBulk(places) then
+		addWipesOneByOne(places)
 	end
 
 	Editor:FinishBatch()
@@ -264,6 +316,9 @@ end
 --Modified2: BEAT_DENOM=1048576 + 同一beatタイミングのX平均マージ
 --Modified3: 区間内で 1/128beat 未満の間隔になるsegを間引く(貪欲フィルタ)
 --Modified4: wipefill と同じ視覚曲線になるよう "inverse easing" 化 (X-driven, time-smooth)
+--Modified5: 置くウィップを全部決めてから、このエディタでは 1 回のやり取りで一括して置く
+--            (以前は 1個ずつ AddNote / SetNoteBeat / SetNoteX / SetNoteWidth していて、ノーツが多いと何分も掛かった)。
+--            選んだウィップの beat / x / 幅も、1個につき 1回だけ読む。出来上がる譜面は以前と同じ
 
 PluginName='quad_OutIn'
 PluginMode=7
@@ -311,6 +366,47 @@ local function valueToBeat(val,template)
 	return template
 end
 
+-- ====================================================================
+-- ウィップを置く部分 (このエディタ独自の一括の入口。PluginBridge.bulkWipesTag)
+--   1個ずつ AddNote / SetNoteBeat / SetNoteX / SetNoteWidth を呼ぶと、ノーツ 1個につき 4回もやり取りが要るので、
+--   ノーツが多いと何分も掛かる。このエディタでは、置くウィップを全部まとめて 1回で渡す (枝分かれ敷などと同じ「一括」)。
+--   本物の Malody V では GetUserInput が入力欄を出してしまうので、このエディタ独自の API (GetOrderNotes) があるときだけ使う。
+--   使えない環境・失敗したときは、従来どおり 1個ずつ置く。
+-- ====================================================================
+local BULK_WIPES_TAG='@@MSE_ADD_WIPES@@'
+
+-- places: {beat=整数部, numor=分子, x=, w=} の表。全部置けたら true。使えない / 失敗のときは、何も置かずに false
+local function addWipesBulk(places)
+	if Editor.GetOrderNotes==nil then return false end
+	if #places==0 then return true end
+	local flat={}
+	local k=0
+	for i=1,#places do
+		local p=places[i]
+		flat[k+1]=p.beat
+		flat[k+2]=p.numor
+		flat[k+3]=BEAT_DENOM
+		flat[k+4]=p.x
+		flat[k+5]=p.w
+		k=k+5
+	end
+	local ok,answer=pcall(function()
+		return Editor:GetUserInput(BULK_WIPES_TAG,table.concat(flat,','))
+	end)
+	return ok and type(answer)=='string' and string.sub(answer,1,2)=='ok'
+end
+
+-- 従来の置き方 (1個ずつ)
+local function addWipesOneByOne(places)
+	for i=1,#places do
+		local p=places[i]
+		local id=Editor:AddNote(wipe)
+		Editor:SetNoteBeat(id,{beat=p.beat,numor=p.numor,denom=BEAT_DENOM},true)
+		Editor:SetNoteX(id,p.x)
+		Editor:SetNoteWidth(id,p.w)
+	end
+end
+
 function Run()
 
 	local Notes=Editor:GetSelectNotes()
@@ -326,6 +422,9 @@ function Run()
 		list[#list+1]={
 			note=n,
 			time=Editor:GetNoteTime(n,true),
+			beat=Editor:GetNoteBeat(n,true),
+			x=Editor:GetNoteX(n),
+			width=Editor:GetNoteWidth(n),
 		}
 	end
 
@@ -360,8 +459,7 @@ function Run()
 	end
 
 	for i=1,#list do
-		local n=list[i].note
-		local b=Editor:GetNoteBeat(n,true)
+		local b=list[i].beat
 		local key=b.beat*(BEAT_DENOM+1)+b.numor
 		if index[key]==nil then
 			buffer[#buffer+1]={
@@ -380,17 +478,17 @@ function Run()
 	end
 
 	for s=1,segCount do
-		local startNote=list[s].note
-		local endNote  =list[s+1].note
+		local startItem=list[s]
+		local endItem  =list[s+1]
 
-		local startBeat=Editor:GetNoteBeat(startNote,true)
-		local endBeat  =Editor:GetNoteBeat(endNote,true)
+		local startBeat=startItem.beat
+		local endBeat  =endItem.beat
 
-		local startX=Editor:GetNoteX(startNote)
-		local endX  =Editor:GetNoteX(endNote)
+		local startX=startItem.x
+		local endX  =endItem.x
 
-		local startWidth=Editor:GetNoteWidth(startNote)
-		local endWidth  =Editor:GetNoteWidth(endNote)
+		local startWidth=startItem.width
+		local endWidth  =endItem.width
 
 		local dx=endX-startX
 
@@ -444,6 +542,9 @@ function Run()
 	local mergedCount=0
 	local droppedByEndpoint=0
 
+	-- 置くウィップを、先に全部決める
+	local places={}
+
 	for _,e in ipairs(buffer) do
 		if e.isEndpoint then
 			if e.cnt>0 then
@@ -457,13 +558,13 @@ function Run()
 			local avgW=math.floor(e.wSum/e.cnt+0.5)
 			if avgW<1 then avgW=1 end
 
-			local beat={beat=e.beatInt,numor=e.numor,denom=BEAT_DENOM}
-
-			local id=Editor:AddNote(wipe)
-			Editor:SetNoteBeat(id,beat,true)
-			Editor:SetNoteX(id,avgX)
-			Editor:SetNoteWidth(id,avgW)
+			places[#places+1]={beat=e.beatInt,numor=e.numor,x=avgX,w=avgW}
 		end
+	end
+
+	-- このエディタでは 1回で一括して置く。使えない / 失敗のときは、従来どおり 1個ずつ置く
+	if not addWipesBulk(places) then
+		addWipesOneByOne(places)
 	end
 
 	Editor:FinishBatch()

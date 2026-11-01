@@ -94,6 +94,11 @@ final class PluginBridge {
     /// LuaEngineSource.swift (自動生成) に新しい関数を足さなくても、Lua から一括の入口を呼べるようにするための通り道
     static let bulkHoldsTag = "@@BM_ADD_HOLDS@@"
 
+    /// quad_InOut / quad_OutIn 用の合図 (このエディタ独自)。bulkHoldsTag と同じ通り道で、見出しがこれで始まる GetUserInput は、
+    /// ダイアログを出さずに、ウィップを全部まとめて置く (1個ずつ AddNote / SetNoteBeat / SetNoteX / SetNoteWidth を呼ぶと、
+    /// ノーツ 1個につき 4回もメインスレッドとやり取りして、そのたびに画面が描き直されるので、何分も掛かる)
+    static let bulkWipesTag = "@@MSE_ADD_WIPES@@"
+
     init(state: EditorState?, pluginName: String, assetDir: URL? = nil) {
         self.state = state
         self.pluginName = pluginName
@@ -174,6 +179,8 @@ final class PluginBridge {
             let inputArgs = parseArgs(argsJSON)
             // このエディタ独自 (img2hold 用): 見出しが bulkHoldsTag で始まるときは、ダイアログを出さずに、ホールドを一括で置く
             if text(inputArgs, 0).hasPrefix(PluginBridge.bulkHoldsTag) { return bulkHolds(inputArgs) }
+            // このエディタ独自 (quad_InOut / quad_OutIn 用): 見出しが bulkWipesTag で始まるときは、ダイアログを出さずに、ウィップを一括で置く
+            if text(inputArgs, 0).hasPrefix(PluginBridge.bulkWipesTag) { return bulkWipes(inputArgs) }
             // 操作型プラグインはメインスレッドで動くので、答えを待てない: 表示だけして、すぐ続ける (入力は nil になる)
             if Thread.isMainThread { return dialogOnMain(inputArgs) }
             return dialogCall(name, inputArgs)
@@ -430,6 +437,26 @@ final class PluginBridge {
         return json("ok \(made)")
     }
 
+    /// ウィップを一括で置く。quad_InOut / quad_OutIn が、置くウィップを全部決めてから、1 回の往復で渡す。
+    /// 呼び方 (Lua): Editor:GetUserInput(bulkWipesTag, "整数部,分子,分母,x,幅, 整数部,分子,分母,x,幅, …")
+    ///   (1個ぶん = 5つの数。beat は [整数部, 分子, 分母]。x は 0〜255 / 幅は 1〜255 に収める。beat が負なら 0 拍にする)
+    /// 答え: "ok <置いた数>"。5つずつに割り切れないなど、読めない入力は、何も置かずに nil (Lua 側は、1個ずつ置く方法に切り替える)
+    private func bulkWipes(_ a: [Any]) -> String {
+        if state == nil { return nullJSON }
+        let nums = text(a, 1).split(separator: ",").map { Double(String($0)) ?? 0 }
+        if nums.count < 5 { return json("ok 0") }
+        if nums.count % 5 != 0 { return nullJSON }
+        var made = 0
+        if Thread.isMainThread {
+            made = addWipesMain(nums)
+        } else {
+            DispatchQueue.main.sync {
+                made = self.addWipesMain(nums)
+            }
+        }
+        return json("ok \(made)")
+    }
+
     // MARK: - 引数・戻り値の変換
 
     private func parseArgs(_ s: String) -> [Any] {
@@ -558,6 +585,29 @@ final class PluginBridge {
             var note = Note(beat: headBeat, x: x, w: 1, type: nil)
             note.segs = [Seg(beat: durBeat, x: 0)]
             made.append(note)
+        }
+        let first = st.chart.notes.count
+        st.chart.notes.append(contentsOf: made)
+        for (k, note) in made.enumerated() {
+            indexMap[note.id] = first + k
+        }
+        return n
+    }
+
+    /// ウィップを一括で置く (メインスレッド)。v = [整数部, 分子, 分母, x, 幅] を並べた配列。
+    /// ノーツを手元で全部作ってから、譜面へ 1 回で足す (1個ずつ足すと、そのたびに画面が描き直される)。
+    /// 1個ぶんの中身は、AddNote(1024) + SetNoteBeat + SetNoteX + SetNoteWidth と同じ (beat の丸め方・x と幅の範囲も同じ)
+    private func addWipesMain(_ v: [Double]) -> Int {
+        guard let st = state else { return 0 }
+        let n = v.count / 5
+        if n == 0 { return 0 }
+        touch(st)
+        var made: [Note] = []
+        made.reserveCapacity(n)
+        for k in 0..<n {
+            var b = PluginBridge.makeBeat(v[k * 5], v[k * 5 + 1], v[k * 5 + 2])
+            if b.value < 0 { b = Beat.zero }
+            made.append(Note(beat: b, x: clampInt(v[k * 5 + 3], 0, 255), w: clampInt(v[k * 5 + 4], 1, 255), type: 4))
         }
         let first = st.chart.notes.count
         st.chart.notes.append(contentsOf: made)
