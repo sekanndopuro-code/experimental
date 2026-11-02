@@ -7,7 +7,7 @@ import UIKit
 // More の先にもう一段メニューがある。ここでは使う 4 つだけにして、階層は作らない:
 //   ・Information … 右ウィンドウ (BPM list / Effect list と同じ滑って入る窓) で曲名・作者・オフセットなどを編集
 //   ・More (•••)  … 押した瞬間に mcz を作って、共有シートを出す (「譜面をパッケージ化してエクスポート」)
-//   ・Review      … 多重ノーツ (同じ拍・同じ中心 x に、tap と tap / tap と wipe が重なっているところ) を探して、いちばん早い拍へ飛ぶ。無ければ「0 issue found」
+//   ・Review      … 通常ノーツ (tap) 同士の重なり / 近すぎ (同じ拍で、端と端の間隔がグリッド 1 マス未満) を探して、いちばん早い拍へ飛ぶ。無ければ「0 issue found」
 //   ・Quit        … 押した瞬間に保存して、エディタを閉じてファイル選択へ戻る
 // 右ボタン列の入れ替わり・名前 (Back / Information / ...) の出方は EDIT と同じ (EditorView.swift の RightPanel)。
 
@@ -33,10 +33,12 @@ extension EditorState {
         }
     }
 
-    /// Review: 多重ノーツ (拍も中心 x も全く同じ位置に重なっている tap と tap / tap と wipe) を探す。
+    /// Review: 通常ノーツ (tap) 同士の「重なり / 近すぎ」を探す。
+    ///   ・同じ拍にある tap と tap で、端と端の間隔がグリッド 1 マス (= 255 / gridLines) 未満のものが対象。
+    ///     完全に重なっている・一部だけ重なっている・ぴったり接している・1 マスに届かず空いている、のどれも見つける
+    ///   ・調べるのは tap どうしだけ。wipe やスライド (始点・seg) は、tap と重なっていても、wipe 同士・スライド同士でも調べない
     ///   ・見つかったら、いちばん早い拍へ飛ぶ (再生中なら止めてから飛ぶ)。複数あっても、時系列で最初の 1 か所だけ
     ///   ・見つからなければ、画面の上に「0 issue found」が一瞬だけ出る (`reviewNoticeTick` を進める。表示は ReviewNotice.swift)
-    ///   ・スライド (seg のあるノーツ) は、始点も seg も調べない。wipe と wipe の重なりも調べない
     func reviewChart() {
         if let beat = firstOverlapBeat() {
             if isPlaying { pause() }
@@ -46,31 +48,48 @@ extension EditorState {
         }
     }
 
-    /// 同じ (拍, 中心 x) に、tap が 1 つ以上あり、tap + wipe が合わせて 2 つ以上あるところのうち、いちばん早い拍。無ければ nil。
-    /// 数え方は、描画 (Renderers) と同じ: スライド以外で、wipe でないものは tap
+    /// tap 同士の端と端の間隔が、これより小さければ「近すぎ」(x の単位)。
+    /// グリッド 1 マスは 255 / gridLines だが、x と w は整数に丸めて保存される。そのため、グリッドに乗せてちょうど 1 マス空けたノーツでも、
+    /// 端と端の間隔は 1 マスより最大 1.43 ほど小さくなる (グリッド 1〜64 本のすべての置き方を調べた値)。
+    /// 正しく置いたノーツを見つけてしまわないよう、その分として 1.5 だけ甘くする。
+    /// ぴったり接している (間隔 0) ものは、グリッドが細かくても必ず見つかるように、下限を 0.5 にしてある
+    private var minTapGap: Double {
+        let cell = 255.0 / Double(max(1, gridLines))
+        return max(cell - 1.5, 0.5)
+    }
+
+    /// 同じ拍の tap 同士で、端と端の間隔が `minTapGap` 未満のところのうち、いちばん早い拍。無ければ nil。
+    /// 数え方は、描画 (Renderers) と同じ: スライド以外で、wipe でないものは tap。ノーツの両端は x ± w / 2
     private func firstOverlapBeat() -> Beat? {
-        struct Spot: Hashable {
+        struct Tap {
             let beat: Beat
-            let x: Int
+            let left: Double
+            let right: Double
         }
-        var taps: [Spot: Int] = [:]
-        var wipes: [Spot: Int] = [:]
-        for n in chart.notes where !n.isSlide {
-            let spot = Spot(beat: n.beat, x: n.x)
-            if n.isWipe {
-                wipes[spot, default: 0] += 1
-            } else {
-                taps[spot, default: 0] += 1
+        var taps: [Tap] = []
+        taps.reserveCapacity(chart.notes.count)
+        for n in chart.notes where !n.isSlide && !n.isWipe {
+            let half = Double(n.w) / 2
+            taps.append(Tap(beat: n.beat, left: Double(n.x) - half, right: Double(n.x) + half))
+        }
+        // 拍の順に並べ、同じ拍の中では左端の順に並べる。すると、同じ拍の中で「それまでの右端のいちばん大きい値」と
+        // 次の左端を比べるだけで、どの 2 つの組も調べたことになる (一方が他方を丸ごと含んでいる場合も、間隔がマイナスになって見つかる)。
+        // 拍の順なので、最初に見つかった拍がいちばん早い拍
+        taps.sort { $0.beat != $1.beat ? $0.beat < $1.beat : $0.left < $1.left }
+        let minGap = minTapGap
+        var i = 0
+        while i < taps.count {
+            let beat = taps[i].beat
+            var maxRight = taps[i].right
+            var j = i + 1
+            while j < taps.count, taps[j].beat == beat {
+                if taps[j].left - maxRight < minGap { return beat }
+                maxRight = max(maxRight, taps[j].right)
+                j += 1
             }
+            i = j
         }
-        var best: Beat? = nil
-        for (spot, tapCount) in taps {
-            // tap が 2 つ以上 (tap と tap)、または tap のところに wipe が 1 つ以上 (tap と wipe)
-            guard tapCount >= 2 || (wipes[spot] ?? 0) >= 1 else { continue }
-            if let b = best, b <= spot.beat { continue }
-            best = spot.beat
-        }
-        return best
+        return nil
     }
 
     /// Quit: 再生を止めて、保存して、エディタを閉じる (確認ダイアログなし)
