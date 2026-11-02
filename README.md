@@ -1,4 +1,4 @@
-# Malody Slide Editor (Swift Playgrounds / iPad)
+# Malody Slide Editor 
 
 ## 開き方
 1. `MalodySlideEditor.swiftpm` を iPad の「ファイル」に置き、Swift Playgrounds で開く
