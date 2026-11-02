@@ -52,7 +52,7 @@ struct PowerIcon: View {
     }
 }
 
-/// Review: 正方形の中に、小さい正方形 (多重ノーツ探し)。外側は他のアイコンと同じ太さ (線 4pt)、内側は Information の輪と同じ 3.4pt
+/// Review: 正方形の中に、小さい正方形 (tap 同士の重なり探し)。外側は他のアイコンと同じ太さ (線 4pt)、内側は Information の輪と同じ 3.4pt
 struct ReviewIcon: View {
     let color: Color
 

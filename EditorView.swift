@@ -800,7 +800,7 @@ struct RightPanel: View {
                 state.shareMCZNow()
             }
             .frame(height: pitch)
-            PanelButton(glyph: "□", icon: { AnyView(ReviewIcon(color: $0)) }) {      // Review: 多重ノーツを探して、いちばん早い拍へ飛ぶ (無ければ「0 issue found」)
+            PanelButton(glyph: "□", icon: { AnyView(ReviewIcon(color: $0)) }) {      // Review: tap 同士の重なり / 近すぎを探して、いちばん早い拍へ飛ぶ (無ければ「0 issue found」)
                 state.reviewChart()
             }
             .frame(height: pitch)
