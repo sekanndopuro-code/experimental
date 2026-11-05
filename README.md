@@ -33,6 +33,7 @@
 | MoreMenuIcons.swift | More メニューのアイコン (`MoreMenuIcon`)。本家の画面収録から起こした輪郭 (`MoreMenuIconData`) と、自作の Time range (正方形 + 上矢印) |
 | RootView.swift | 起動時のファイル選択。**まとめて選んだファイルを拡張子で mc / 音源 / 背景画像に自動で振り分ける** + **mcz の展開読み込み** (下の「起動画面のファイル選択」) |
 | TestPlay.swift | テストプレイ。MalodySlideTestplayer の判定・音声・描画をそのまま組み込み (Note→PlayNote に改名) |
+| TouchEffect.swift         | SETTING の **タッチエフェクト**。画面 (UIWindow) に「触れたことを見るだけ」のジェスチャを付けて、白い輪 (広がって消える) と赤い丸 (指についてくる) を CALayer で描く。テストプレイと同じ見た目 |
 | PCMCache.swift | **使わなくなった** (中身は空)。曲を開くときに全部展開する `SongPCM` になったので、背景の先読み展開は要らない。GitHub 上で削除してよい |
 | RubberBandPCMSource.swift | **Rubber Band 版の時間伸縮** (0.75 / 0.5 / 0.25 / 0.1 倍の音)。`CRubberBand` (C++) があるビルド = GitHub Actions のときだけ有効。Swift Playgrounds では中身が空になり、`TimeStretch.swift` の自前版で動く。組み込み方は `RubberBand導入手順.md` |
 | Effects.swift | effect (scroll / jump) から「表示位置 P(t)」を決める `EffectMap` (テストプレイと、エディタの **FX 表示** の見た目だけが変わる。判定は変わらない) |
@@ -361,6 +362,10 @@ BPM list / Effect list と同じ作りに統一した。`SidePanel` に `.inform
   - 曲の音量 / ノーツサウンドの音量 (0〜100%、5%刻み)。値は次回起動時も保存される (UserDefaults: `editor.musicVolume` / `editor.noteVolume`)
   - 曲を再生したまま開いて、音量を調整できる (開いても再生は止まらない。ウィンドウより左を触ると閉じる)
   - ノーツサウンドのスライダーは、指を離した時に1発鳴って音量を確かめられる。0% でキー音オフ
+  * **タッチエフェクト** (チェックボックス、初期値オフ。保存される: UserDefaults `editor.touchEffect`)。オンのとき、画面のどこを触っても、触れた所に白い輪 (直径 90pt・0.3 秒で 0.5 倍 → 1.5 倍に広がって透明になる) が出て、触れている間は赤い半透明の丸 (直径 56pt) が指についてくる。テストプレイ (`GameView.showDot` / `spawnRing`) と同じ見た目・大きさ・色
+    + 軽さ: 描くのは CALayer だけで、SwiftUI の再描画は起こさない。輪の動きは Core Animation が描くので、アプリ側は毎フレーム何もしない。層は使い回す。オフのときはジェスチャも層も画面から外す
+    + 他の操作に影響しない: タッチを見るだけのジェスチャで、他のジェスチャを止めない・遅らせない・タッチを奪わない。複数の指も出る。テストプレイが出ている間はエディタ側を外す (二重表示を避ける)
+    + 関連コード: `TouchEffect.swift` (`TouchEffectInstaller` / `TouchEffectOverlay` / `TouchObserver`)、`EditorView.swift` の `.background(TouchEffectInstaller(...))`、`EditorState.touchEffect`、`SideWindow.swift` の `touchEffectRow`
 - キー音が鳴るタイミング
   - エディタ再生中: ノーツ先頭が再生ライン(シアンの横棒)に触れる瞬間。同時押し(1ms以内)は1発にまとめる
   - テストプレイ: tap / wipe / スライド始点を捌いた瞬間 (`GameCore.onHit`)

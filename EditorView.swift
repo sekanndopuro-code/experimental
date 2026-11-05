@@ -939,6 +939,9 @@ struct EditorView: View {
         }
         .coordinateSpace(name: Self.rootSpace)
         .background(EditorBackground(state: state))      // 背景画像 (無いときは黒)。ノーツ・レーン・帯は透明に描いて、これを透かす
+        // SETTING の「タッチエフェクト」。画面 (UIWindow) に取り付けるので、置く場所はどこでもよい。
+        // テストプレイが出ている間は外す (テストプレイが自分で同じものを出すので、二重になるのを避ける)
+        .background(TouchEffectInstaller(enabled: state.touchEffect && state.testLaunch == nil))
         .ignoresSafeArea(.keyboard, edges: .bottom)      // 数値入力のキーボードで、エディタ全体が縮まないように
         .overlay(popupLayer)
         .overlay(PluginDialogLayer(state: state))

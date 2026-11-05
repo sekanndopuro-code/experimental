@@ -693,6 +693,8 @@ private struct SettingWindowContent: View {
                     checkRows
                     SideDivider()
                     holdRow
+                    SideDivider()
+                    touchEffectRow
                     playInfoText
                 }
                 .padding(.top, 8)
@@ -833,6 +835,13 @@ private struct SettingWindowContent: View {
                       onEditingChanged: nil)
             note("編集ツールを選んでいないとき、レーンを動かさずに押し続けると、選択中のノーツが全部解除されます。")
         }
+    }
+
+    /// タッチエフェクト (保存される。初期値オフ)。テストプレイと同じ白い輪と赤い丸を、エディタの画面にも出す (TouchEffect.swift)
+    private var touchEffectRow: some View {
+        checkRow(title: "タッチエフェクト",
+                 note: "オンにすると、画面に触れた所に白い輪が広がって消え、触れている間は赤い半透明の丸が指についてきます (テストプレイと同じ見た目)。レーン・左の帯・シークバー・右のボタンなど、エディタのどこを触っても出ます。操作の邪魔はしません。テストプレイ中は、これまでどおりテストプレイ側の表示です。",
+                 isOn: $state.touchEffect)
     }
 
     /// 白い縁取りの四角 (BPM / Effect の入力欄と同じ線) のチェックボックス。オンのときは水色のチェック

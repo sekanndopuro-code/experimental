@@ -227,6 +227,11 @@ final class EditorState: ObservableObject {
         didSet { UserDefaults.standard.set(holdDeselectSec, forKey: "editor.holdDeselectSec") }
     }
 
+    // タッチエフェクト (画面に触れた所に白い輪、触れている間は赤い丸。テストプレイと同じ見た目)。次回起動時も保存される。初期値はオフ
+    @Published var touchEffect = false {
+        didSet { UserDefaults.standard.set(touchEffect, forKey: "editor.touchEffect") }
+    }
+
     // 遅い速度の再生 (伸ばした音) の調整。次回起動時も保存される
     @Published var sharpStretch = false {               // true: 伸ばす窓を小さくして、ドラムなどの立ち上がりをはっきりさせる (低い音は少しぼやける)
         didSet {
@@ -440,6 +445,7 @@ final class EditorState: ObservableObject {
         if let v = ud.object(forKey: "editor.allowNoteOverflow") as? Bool { self.allowNoteOverflow = v }
         if let v = ud.object(forKey: "editor.resnapExistingNotes") as? Bool { self.resnapExistingNotes = v }
         if let v = ud.object(forKey: "editor.copyKeepsRangeOffset") as? Bool { self.copyKeepsRangeOffset = v }
+        if let v = ud.object(forKey: "editor.touchEffect") as? Bool { self.touchEffect = v }
         if let v = ud.object(forKey: "editor.holdDeselectSec") as? Double {
             self.holdDeselectSec = min(max(v, Self.holdRange.lowerBound), Self.holdRange.upperBound)
         }
