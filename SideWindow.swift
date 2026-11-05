@@ -730,7 +730,7 @@ private struct SettingWindowContent: View {
         }
     }
 
-    /// チェックボックス 6 つ
+    /// チェックボックス 7 つ
     private var checkRows: some View {
         VStack(alignment: .leading, spacing: 16) {
             checkRow(title: "立ち上がりをはっきりさせる (伸ばす窓を小さく)",
@@ -754,6 +754,12 @@ private struct SettingWindowContent: View {
             checkRow(title: "grid alignがオンの時、グリッド上に常にノーツの中心を合わせる",
                      note: "オンのとき (初期値・本家と同じ): ノーツを動かすと、動かした先でいちばん近いグリッド線に中心が吸着します。置いたときと同じ座標になるので、グリッドに乗っていないノーツを動かして、置いたノーツに重ねても中心が必ずそろいます。スライドは始点と各 seg の中心がそれぞれ吸着します。オフにすると、動かす前の位置から「グリッド1マスの整数倍」だけずらす固定変位になります。",
                      isOn: $state.gridCenterAlign)
+
+            SideDivider()
+
+            checkRow(title: "既存のノーツを再スナップする",
+                     note: "オフのとき (初期値): 選択したノーツを上下 (時間軸方向) に動かすと、指の移動量を 1/n 拍 (LFB) の整数倍に丸めた量だけ、いまの拍からずらします。もともとの LFB からのズレはそのまま保存されます。たとえば LFB を 24 にして 1 マス上へ → 32 に変えて 1 マス下へ戻すと、1/24 − 1/32 = 1/96 拍のズレのノーツを作れます (本家 Malody の手法)。オンにすると、動かした先でいちばん近い LFB の線に吸着します (以前の動き。ズレは消えます)。",
+                     isOn: $state.resnapExistingNotes)
 
             SideDivider()
 

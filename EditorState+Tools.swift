@@ -350,7 +350,14 @@ extension EditorState {
         }
 
         let rawBeats = Double(start.y - current.y) / g.ppb          // 上へ動かすほど後ろの拍
-        var delta = snapBeat(moveAnchorBeat.value + rawBeats) - moveAnchorBeat
+        var delta: Beat
+        if resnapExistingNotes {
+            // オン (以前の動き): 触れたノーツが、動かした先でいちばん近い 1/n 拍の線に乗る量を移動量にする
+            delta = snapBeat(moveAnchorBeat.value + rawBeats) - moveAnchorBeat
+        } else {
+            // オフ (初期値): 指の移動量を 1/n 拍の整数倍に丸めるだけ (固定変位)。もともとの LFB からのズレは保たれる
+            delta = Beat.nearest(rawBeats, den: snapDen)
+        }
         if !(moveMinBeat < Beat.zero) && (moveMinBeat + delta) < Beat.zero {
             delta = Beat.zero - moveMinBeat                           // 0拍より前へは行かせない
         }
@@ -373,9 +380,20 @@ extension EditorState {
         moveLastDelta = delta
         moveLastDX = dx
         for t in moveTargets {
-            chart.notes[t.index].beat = t.orig.beat + delta
+            chart.notes[t.index].beat = movedBeat(t.orig.beat, by: delta)
             chart.notes[t.index].x = t.orig.x + dx
         }
+    }
+
+    /// 動かす前の拍 orig を delta だけ動かした拍。
+    /// 「再スナップする」がオフのときは、足した結果を約分する (例: 1/24 − 1/32 = 1/96 拍は [0,1,96]。1/96 を 1/32 ぶん上へ戻して 4/96 になったら [0,1,24] に直す)。
+    /// 動かしていない (delta が 0) ときは、もとの書き方のまま。オンのときも、これまでどおり約分しない
+    private func movedBeat(_ orig: Beat, by delta: Beat) -> Beat {
+        if delta == .zero { return orig }
+        let b = orig + delta
+        if resnapExistingNotes { return b }
+        let g = gcdInt(b.numerator, b.d)
+        return Beat.ticks(b.numerator / g, den: b.d / g)
     }
 
     /// 中心をグリッド線に合わせる移動 (gridCenterAlign がオン)。
@@ -395,7 +413,7 @@ extension EditorState {
             } else if !orig.segs.isEmpty {
                 head = keepSegsInLane(head: head, orig: orig)
             }
-            let newBeat = orig.beat + delta
+            let newBeat = movedBeat(orig.beat, by: delta)
             let cur = chart.notes[t.index]
             if cur.beat == newBeat && cur.x == head { continue } // 前の指の位置と結果が同じなら、書き込まない (高密度のスライドでも軽いように)
             chart.notes[t.index].beat = newBeat

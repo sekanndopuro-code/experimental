@@ -278,6 +278,15 @@ final class EditorState: ObservableObject {
         didSet { UserDefaults.standard.set(snapViewToLFB, forKey: "editor.snapViewToLFB") }
     }
 
+    // 選択したノーツを上下 (時間軸方向) に動かしたとき、動かした先を LFB (分割 = 1/n 拍) の線に「再スナップ」するか。次回起動時も保存される。初期値はオフ
+    //   オン: 以前の動き。触れたノーツが動かした先でいちばん近い 1/n 拍の線に吸着する (グリッドに乗っていなかったズレは消える)
+    //   オフ: 指の移動量を「1/n 拍の整数倍」に丸めて、動かす前の拍からその量だけずらす (固定変位)。
+    //         LFB に乗っていなかったノーツのズレは、そのまま残って保存される。
+    //         本家 Malody の「24 分割で 1 マス上へ → 32 分割に変えて 1 マス下へ戻す」(= 1/24 − 1/32 = 1/96 拍のズレ) を再現できる
+    @Published var resnapExistingNotes = false {
+        didSet { UserDefaults.standard.set(resnapExistingNotes, forKey: "editor.resnapExistingNotes") }
+    }
+
     // MARK: ファイル
     let song: SongPCM?                  // 開くときに 1 回だけ展開した曲 (エディタの再生・テストプレイ・曲の長さが、これを共有する)
     let mcURL: URL
@@ -419,6 +428,7 @@ final class EditorState: ObservableObject {
         if let v = ud.object(forKey: "editor.snapViewToLFB") as? Bool { self.snapViewToLFB = v }
         if let v = ud.object(forKey: "editor.gridCenterAlign") as? Bool { self.gridCenterAlign = v }
         if let v = ud.object(forKey: "editor.allowNoteOverflow") as? Bool { self.allowNoteOverflow = v }
+        if let v = ud.object(forKey: "editor.resnapExistingNotes") as? Bool { self.resnapExistingNotes = v }
         if let v = ud.object(forKey: "editor.holdDeselectSec") as? Double {
             self.holdDeselectSec = min(max(v, Self.holdRange.lowerBound), Self.holdRange.upperBound)
         }
