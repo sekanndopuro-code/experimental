@@ -11,9 +11,10 @@ import SwiftUI
 //
 // テストプレイとそろえてあること:
 //   ・seg の丸は描かない (リボンとタップ / ウィップだけ)
-//   ・判定を過ぎたもの (時刻が今より前のタップ / ウィップ、全体が過ぎたスライド) は出さない
+//   ・判定を過ぎたもの (時刻が今より前のタップ / ウィップ、全体が過ぎたスライド) は、fxKeepBeats (4 拍) ぶん過ぎるまでは残し、それを過ぎたら出さない
+//     (テストプレイは、判定を過ぎたらすぐ消える。エディタでは、過ぎたあとの様子も見えたほうが作りやすいので、少し残している)
 //   ・スライドは、始点が画面の上端に入ってから出す (始点より前に伸びる部分も、そのとき一緒に出る)
-//   ・逆走 (scroll < 0 / jump < 0) のある譜面では、スライドの区間は、終わりの点を判定が過ぎたら消える
+//   ・逆走 (scroll < 0 / jump < 0) のある譜面では、スライドの区間は、終わりの点を判定が過ぎて fxKeepBeats ぶん経ったら消える
 //   ・jump で遠くへ飛んだリボンは、画面の範囲に切り詰めて描く (座標が大きすぎると描画が壊れるため)
 // 当たり判定・編集は無い (見るだけ)。
 
@@ -28,6 +29,9 @@ extension LaneRenderer {
     /// 1 画面に描く上限 (scroll 0 で何千ものノーツが同じ高さに重なっても、固まらないように)
     private static let fxMaxBars = 600
     private static let fxMaxQuads = 8000
+    /// 判定を過ぎたノーツを、あと何拍ぶん描いたままにするか (エディタの FX 表示だけ。テストプレイでは、判定を過ぎたらすぐ消える)。
+    /// 0 にすると、これまでどおり、判定を過ぎた瞬間に消える
+    static let fxKeepBeats = 4.0
 
     static func drawFX(ctx: GraphicsContext, g: LaneGeo, state: EditorState) {
         guard let f = g.fx else { return }
@@ -83,6 +87,8 @@ extension LaneRenderer {
         if ranges.isEmpty { return }
         let pps = g.fxPxPerSec(f)
         let now = f.nowSec
+        // この時刻より前に判定を過ぎたものは、もう描かない (今から fxKeepBeats 拍ぶん前まで残す)
+        let keep = fxKeepBeats > 0 ? f.time.sec(atBeat: f.time.beat(atSec: now) - fxKeepBeats) : now
         let notes = state.chart.notes
 
         // 見える範囲に掛かるノーツ (複数の範囲にまたがるものは 1 回だけ)
@@ -127,12 +133,12 @@ extension LaneRenderer {
                 ts.append(t)
                 if t > maxT { maxT = t }
             }
-            if maxT <= now - 1e-4 { continue }                              // 全体が判定を過ぎた
+            if maxT <= keep - 1e-4 { continue }                             // 全体が判定を過ぎて、残す期間も過ぎた
             if headT > now + 1e-4 && headP - f.pNow > topDist { continue }  // 始点がまだ画面の上端に入っていない
-            let gated = maxT > negFrom                                      // 区間の終わりの点を判定が過ぎたら、その区間は消す
+            let gated = maxT > negFrom                                      // 区間の終わりの点を判定が過ぎて、残す期間も過ぎたら、その区間は消す
             let hw = CGFloat(n.w) / 255.0 * g.trackW / 2.0
             for k in 1..<xs.count {
-                if gated && max(ts[k - 1], ts[k]) <= now { continue }
+                if gated && max(ts[k - 1], ts[k]) <= keep { continue }
                 // jump で何百万拍も先 / 手前へ飛んだ点があっても、描くのは画面の縦の範囲だけ
                 guard let q = clipQuad(ya: ys[k - 1], xa: xs[k - 1], yb: ys[k], xb: xs[k],
                                        yMin: -24, yMax: g.H + 24) else { continue }
@@ -147,13 +153,13 @@ extension LaneRenderer {
             }
         }
 
-        // 2) タップ / ウィップの棒 (判定を過ぎたものは出さない)
+        // 2) タップ / ウィップの棒 (判定を過ぎて、残す期間も過ぎたものは出さない)
         var bars = 0
         for i in cand where !notes[i].isSlide {
             if bars >= fxMaxBars { break }
             let n = notes[i]
             let t = f.time.sec(atBeat: n.beat.value)
-            if t < now - 1e-4 { continue }
+            if t < keep - 1e-4 { continue }
             let y = yOf(f.map.p(t)) - barLift
             if y < -24 || y > g.H + 24 { continue }
             let hw = CGFloat(n.w) / 255.0 * g.trackW / 2.0
