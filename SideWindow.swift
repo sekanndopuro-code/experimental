@@ -396,9 +396,12 @@ private struct EffectWindowContent: View {
         VStack(spacing: 0) {
             SideTitle(text: "Effect list")
 
+            // effect は 1000 件を超える譜面もあるので、見えている行だけ作る (LazyVStack)。
+            // 全行を一度に作ると、開くのにとても時間がかかっていた
+            let effects = state.chart.effects
             ScrollView {
-                VStack(spacing: 0) {
-                    if state.chart.effects.isEmpty {
+                LazyVStack(spacing: 0) {
+                    if effects.isEmpty {
                         Text("effect はまだありません")
                             .font(PanelFont.label(15))
                             .foregroundColor(Color.white.opacity(0.5))
@@ -406,21 +409,22 @@ private struct EffectWindowContent: View {
                             .padding(.leading, 16.5)
                             .frame(height: 31)
                     }
-                    ForEach(Array(state.chart.effects.enumerated()), id: \.offset) { entry in
-                        SideListRow(selected: entry.offset == selected, action: {
-                            selected = entry.offset
-                            beatText = entry.element.beat.label
-                            kind = entry.element.kind
-                            valueText = entry.element.valueText
+                    ForEach(effects.indices, id: \.self) { i in
+                        let e = effects[i]
+                        SideListRow(selected: i == selected, action: {
+                            selected = i
+                            beatText = e.beat.label
+                            kind = e.kind
+                            valueText = e.valueText
                         }) {
                             HStack(spacing: 0) {
-                                Text(entry.element.beat.label)
+                                Text(e.beat.label)
                                     .lineLimit(1)
                                     .fixedSize()
                                     .frame(width: 100, alignment: .leading)
-                                Text(entry.element.kind.label)
+                                Text(e.kind.label)
                                     .frame(width: 70, alignment: .leading)
-                                Text(entry.element.valueText)
+                                Text(e.valueText)
                                     .frame(maxWidth: .infinity, alignment: .trailing)
                                     .padding(.trailing, 16.5)
                             }
