@@ -854,6 +854,14 @@ extension EditorState {
         for i in idx where chart.notes[i].beat < base {
             base = chart.notes[i].beat
         }
+        // SETTING の「time rangeを用いたコピペで…」がオンで、Time range の始点・終点が出ているときは、基準を「範囲の始点の拍」にする。
+        // Paste したとき、範囲の始点が再生ラインに来て、最初のノーツまでの縦のズレ (LFB に乗っていない分も) が保たれる。
+        // 範囲の始点より前にノーツがある (= 範囲で選んだ状態ではない) ときは、これまでどおり最初のノーツが基準
+        var keptRangeOffset = false
+        if copyKeepsRangeOffset, let s = rangeStart, rangeEnd != nil, !(base < s) {
+            keptRangeOffset = base != s
+            base = s
+        }
         var list: [Note] = []
         for i in idx {
             var m = chart.notes[i]
@@ -861,10 +869,13 @@ extension EditorState {
             list.append(m)
         }
         clip = list
-        showToast("\(list.count) 個のノーツをコピーしました")
+        showToast(keptRangeOffset
+                  ? "\(list.count) 個のノーツをコピーしました (範囲の始点からのズレも保存)"
+                  : "\(list.count) 個のノーツをコピーしました")
     }
 
     /// Paste: 保存したノーツを、表示中の位置 (再生ライン) にいちばん前のノーツが来るように貼り付ける。
+    /// (SETTING の「time rangeを用いたコピペで…」をオンにして Copy したものは、Time range の始点が再生ラインに来る。始点から最初のノーツまでのズレも保たれる)
     /// 貼り付けたノーツは選択状態になるので、そのまま触って動かせる
     func paste() {
         if clip.isEmpty {

@@ -287,6 +287,16 @@ final class EditorState: ObservableObject {
         didSet { UserDefaults.standard.set(resnapExistingNotes, forKey: "editor.resnapExistingNotes") }
     }
 
+    // Time range で選んだノーツをコピーするとき、範囲の始点の拍から最初のノーツまでの縦のズレも保存するか。次回起動時も保存される。初期値はオフ
+    //   オフ: 以前の動き。コピーは「いちばん前のノーツ」を基準にするので、Paste するとそのノーツが再生ライン (LFB に吸着した拍) に来る。
+    //         もとのノーツが LFB に乗っていなくても (例: 25:273/18392)、貼り付けた先ではズレが消える
+    //   オン: Time range が出ている間の Copy は、「範囲の始点の拍」を基準にする。Paste すると範囲の始点が再生ラインに来て、
+    //         最初のノーツまでのズレ (例: 273/18392 拍) もそのまま保たれる。再生ラインを範囲の始点に合わせて貼れば、もとのノーツと同じ拍に重なる (同時押し)
+    //   Time range を抜けたあとの Copy (範囲の表示が消えているとき) は、この設定がオンでも、これまでどおり最初のノーツが基準
+    @Published var copyKeepsRangeOffset = false {
+        didSet { UserDefaults.standard.set(copyKeepsRangeOffset, forKey: "editor.copyKeepsRangeOffset") }
+    }
+
     // MARK: ファイル
     let song: SongPCM?                  // 開くときに 1 回だけ展開した曲 (エディタの再生・テストプレイ・曲の長さが、これを共有する)
     let mcURL: URL
@@ -429,6 +439,7 @@ final class EditorState: ObservableObject {
         if let v = ud.object(forKey: "editor.gridCenterAlign") as? Bool { self.gridCenterAlign = v }
         if let v = ud.object(forKey: "editor.allowNoteOverflow") as? Bool { self.allowNoteOverflow = v }
         if let v = ud.object(forKey: "editor.resnapExistingNotes") as? Bool { self.resnapExistingNotes = v }
+        if let v = ud.object(forKey: "editor.copyKeepsRangeOffset") as? Bool { self.copyKeepsRangeOffset = v }
         if let v = ud.object(forKey: "editor.holdDeselectSec") as? Double {
             self.holdDeselectSec = min(max(v, Self.holdRange.lowerBound), Self.holdRange.upperBound)
         }

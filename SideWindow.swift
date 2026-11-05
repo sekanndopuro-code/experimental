@@ -730,7 +730,7 @@ private struct SettingWindowContent: View {
         }
     }
 
-    /// チェックボックス 7 つ
+    /// チェックボックス 8 つ
     private var checkRows: some View {
         VStack(alignment: .leading, spacing: 16) {
             checkRow(title: "立ち上がりをはっきりさせる (伸ばす窓を小さく)",
@@ -760,6 +760,12 @@ private struct SettingWindowContent: View {
             checkRow(title: "既存のノーツを再スナップする",
                      note: "オフのとき (初期値): 選択したノーツを上下 (時間軸方向) に動かすと、指の移動量を 1/n 拍 (LFB) の整数倍に丸めた量だけ、いまの拍からずらします。もともとの LFB からのズレはそのまま保存されます。たとえば LFB を 24 にして 1 マス上へ → 32 に変えて 1 マス下へ戻すと、1/24 − 1/32 = 1/96 拍のズレのノーツを作れます (本家 Malody の手法)。オンにすると、動かした先でいちばん近い LFB の線に吸着します (以前の動き。ズレは消えます)。",
                      isOn: $state.resnapExistingNotes)
+
+            SideDivider()
+
+            checkRow(title: "time rangeを用いたコピペで始点beatから最初のノーツまでの長さを保存する",
+                     note: "オフのとき (初期値): Copy は、いちばん前のノーツの拍を基準にします。Paste すると、そのノーツが再生ラインの位置 (LFB の線) に来るので、もとのノーツが LFB に乗っていなくても、貼り付けた先ではズレが消えます。オンにすると、Time range の範囲が出ている間の Copy は、範囲の始点の拍を基準にします。Paste すると範囲の始点が再生ラインに来て、始点から最初のノーツまでの縦のズレ (たとえば 25:273/18392 の 273/18392 拍ぶん) もそのまま保たれます。再生ラインを範囲の始点に合わせて貼ると、もとのノーツと同じ拍に重なります (同時押し用)。Time range を抜けたあとの Copy は、この設定がオンでも最初のノーツが基準です。",
+                     isOn: $state.copyKeepsRangeOffset)
 
             SideDivider()
 
