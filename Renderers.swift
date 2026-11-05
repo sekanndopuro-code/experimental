@@ -14,16 +14,15 @@ extension Color {
     static let wipeMid = Color(red: 0.580, green: 0.588, blue: 0.290)
     static let wipeCore = Color(red: 1.000, green: 0.988, blue: 0.773)
     static let wipeGlow = Color(red: 0.950, green: 0.950, blue: 0.250)
-    static let wipeFill = Color.wipeOuter                                          // シークバーの密度表示などで使う黄色
+    static let wipeFill = Color.wipeOuter // シークバーの密度表示などで使う黄色
     // スライドの点 (白 → 水色の輪 → 白)。本家は、輪ごとに少しずつ透けている (23個の点を背景との回帰で実測):
-    //   外側の白い輪 α=0.86 / 水色の輪 α=0.60 / 中心 α=0.94。色は透けていない場合の色 (背景が透ける分、明るめ)
+    // 外側の白い輪 α=0.86 / 水色の輪 α=0.60 / 中心 α=0.94。色は透けていない場合の色 (背景が透ける分、明るめ)
     static let dotOuter = Color(red: 234.0 / 255.0, green: 251.0 / 255.0, blue: 1.000).opacity(0.86)
     static let dotRing = Color(red: 182.0 / 255.0, green: 242.0 / 255.0, blue: 1.000).opacity(0.60)
     static let dotCenter = Color(red: 243.0 / 255.0, green: 252.0 / 255.0, blue: 254.0 / 255.0).opacity(0.94)
     // スライドのリボン: 白に近い水色を、約 40% の濃さで重ねる (本家の単スライドを実測: R/G/B とも α=0.40)
     // 以前の 55% は、スライドが二重に重なった所を測ってしまった値だった
     static let ribbonFill = Color(red: 0.83, green: 1.0, blue: 1.0).opacity(0.40)
-
     // 選択中のノーツ: 通常色の「青い成分」を赤にした色 (明るさ・形は通常と同じ)
     static let selTapOuter = Color(red: 1.000, green: 0.660, blue: 0.660)
     static let selTapMid = Color(red: 0.620, green: 0.100, blue: 0.120)
@@ -37,7 +36,6 @@ extension Color {
     static let selDotRing = Color(red: 1.000, green: 0.500, blue: 0.500).opacity(0.60)
     static let selDotCenter = Color(red: 1.000, green: 0.900, blue: 0.900).opacity(0.94)
     static let selRibbon = Color(red: 1.0, green: 0.78, blue: 0.78).opacity(0.40)
-
     // 時刻表示の背後の、明るい半透明パネル (本家の実測: 約 (88, 88, 66) を 55%)。レーン左の番号欄まで続く
     static let timePanel = Color(red: 88.0 / 255.0, green: 88.0 / 255.0, blue: 66.0 / 255.0).opacity(0.55)
 }
@@ -186,7 +184,7 @@ enum LaneRenderer {
 
     /// effect (scroll / jump) がある拍に、青い点線と値を出す。
     /// BPM (黄色の点線、値はレーンの右側) と同じ拍に重なっても読めるように、値はレーンの左側に出す。
-    /// 同じ拍に scroll と jump があるときは、線は 1 本、値は「scroll 2  jump 1000」のように 1 行に並べる
+    /// 同じ拍に scroll と jump があるときは、線は 1 本、値は「scroll 2 jump 1000」のように 1 行に並べる
     static func drawEffects(_ c: inout GraphicsContext, _ g: LaneGeo, _ s: EditorState) {
         if s.chart.effects.isEmpty { return }
         // 画面に見えている effect だけを拾う (effect が多い譜面でも、毎フレームの負担を小さくする)
@@ -211,7 +209,7 @@ enum LaneRenderer {
             c.stroke(p, with: .color(blue.opacity(0.6)), style: StrokeStyle(lineWidth: 1, dash: [6, 4], dashPhase: 5))
             // scroll を先に、jump を後に並べる (同じ時刻では scroll を変えてから、その値で jump するため)
             let items = row.items.sorted { $0.kind == .scroll && $1.kind != .scroll }
-            let text = items.map { "\($0.kind.label) \($0.valueText)" }.joined(separator: "  ")
+            let text = items.map { "\($0.kind.label) \($0.valueText)" }.joined(separator: " ")
             let t = Text(text).font(.system(size: 11, design: .monospaced)).foregroundColor(blue.opacity(0.95))
             c.draw(t, at: CGPoint(x: g.trackL + 4, y: y - 9), anchor: .leading)
         }
@@ -321,12 +319,10 @@ enum LaneRenderer {
         var area = line
         area.closeSubpath()
         c.fill(area, with: .color(Color.white.opacity(0.10)))
-
         var closing = Path()
         closing.move(to: pts[pts.count - 1])
         closing.addLine(to: pts[0])
         c.stroke(closing, with: .color(Color.white.opacity(0.55)), style: StrokeStyle(lineWidth: 1.2, dash: [3, 4]))
-
         // 暗い下線を敷いてから白の点線を重ねる (明るい背景でも暗いノーツの上でも見えるように)
         c.stroke(line, with: .color(Color.black.opacity(0.55)), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
         c.stroke(line, with: .color(Color.white), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [7, 5]))
@@ -385,6 +381,7 @@ enum LaneRenderer {
     }
 
     // ── ノーツの描き方 (本家 Malody に合わせた値。変えたいときはここを触る) ──
+
     /// タップ / ウィップの棒を、拍の線より上へ持ち上げる量 (pt)。本家は棒の下端が拍の線のすぐ上に乗る (実測: 8pt)。
     /// 0 にすると、棒の真ん中が拍の線に重なる (これまでの描き方)
     static let barLift: CGFloat = 8
@@ -400,9 +397,9 @@ enum LaneRenderer {
         var dots: [CGPoint] = []
         var selDots: [CGPoint] = []
         // 1) スライドのリボン
-        //    seg が何万個ある譜面でも、画面に掛かっている区間だけを描く。
-        //    (以前は見えている slide の全 seg ぶんの図形を毎フレーム作っていたため、大量 seg の譜面で再生が重くなった)
-        //    さらに各区間は表示範囲に切り詰めるので、壊れた値(何億拍も先)の seg があっても描画は画面内だけで済む。
+        // seg が何万個ある譜面でも、画面に掛かっている区間だけを描く。
+        // (以前は見えている slide の全 seg ぶんの図形を毎フレーム作っていたため、大量 seg の譜面で再生が重くなった)
+        // さらに各区間は表示範囲に切り詰めるので、壊れた値(何億拍も先)の seg があっても描画は画面内だけで済む。
         for n in notes where n.isSlide {
             let isSel = !selected.isEmpty && selected.contains(n.id)
             let hw = CGFloat(n.w) / 255.0 * g.trackW / 2.0
@@ -442,7 +439,7 @@ enum LaneRenderer {
                 let cy = g.py(curB)
                 if cy > -24 && cy < g.H + 24 {
                     let pt = CGPoint(x: g.px(curX), y: cy)
-                    dots.append(pt)                         // seg の点は、選択中でも通常の色のまま (本家は、赤くなるのは始点とリボンだけ)
+                    dots.append(pt) // seg の点は、選択中でも通常の色のまま (本家は、赤くなるのは始点とリボンだけ)
                 }
                 prevB = curB
                 prevX = curX
@@ -464,8 +461,9 @@ enum LaneRenderer {
             }
         }
         // 3) スライドの点 (白 → 水色の輪 → 白)。選択中のスライドで赤くなるのは、始点の点だけ (seg の点は通常の色)
-        for pt in dots { drawDot(&c, pt, selected: false) }
-        for pt in selDots { drawDot(&c, pt, selected: true) }
+        // 点は画像にしてあるので、1個あたり「画像を1枚貼る」だけで済む。ほぼ同じ位置に重なる点は 1 個だけ貼る (stampDots)
+        stampDots(&c, dots, dotImages.normal)
+        stampDots(&c, selDots, dotImages.selected)
     }
 
     /// タップの棒の高さ (pt)。本家の実測 約 12pt (縁 1.5 + 帯 1.5 + 芯 5 + 帯 1.5 + 縁 1.5 のぶん)
@@ -492,8 +490,8 @@ enum LaneRenderer {
         let mid = selected ? Color.selWipeMid : Color.wipeMid
         let core = selected ? Color.selWipeCore : Color.wipeCore
         let glow = selected ? Color.selWipeGlow : Color.wipeGlow
-        let h: CGFloat = 6.0            // 棒の高さ 12pt の半分
-        let cap: CGFloat = 4.0          // 外側の矢印ぶん (ノーツの端 = 矢印の先)
+        let h: CGFloat = 6.0   // 棒の高さ 12pt の半分
+        let cap: CGFloat = 4.0 // 外側の矢印ぶん (ノーツの端 = 矢印の先)
         let bx0 = xL + cap
         let bx1 = xR - cap
         let width = bx1 - bx0
@@ -503,7 +501,7 @@ enum LaneRenderer {
             c.fill(Path(roundedRect: r, cornerRadius: 2), with: .color(outer))
             return
         }
-        let t = min(CGFloat(3.4), width / 2 - 1.5)      // 端のとがりの深さ
+        let t = min(CGFloat(3.4), width / 2 - 1.5) // 端のとがりの深さ
         let shape = wipePath(xL: bx0, xR: bx1, yMid: yMid, h: h, t: t, delta: 0)
         c.stroke(shape, with: .color(glow.opacity(0.22)), lineWidth: 4)
         c.fill(shape, with: .color(outer))
@@ -541,7 +539,57 @@ enum LaneRenderer {
         return p
     }
 
+    // ── スライドの点 (seg の丸) ──
+    // 点は、外側の白い輪 (半径 11.4pt) → 水色の輪 (〜7.8pt) → 中心の白 (〜4.5pt) (本家の実測)。
+    // 以前は点 1 個ごとに 3 回の塗りを毎フレームやっていたため、seg が多い所 (何千個も入る画面) で重くなっていた。
+    // 今は同じ絵を最初に 1 回だけ画像にしておき (dotImages)、点の位置に貼るだけにする (stampDots)。
+    // 見た目は同じ (輪ごとの透け具合も、画像の中で今までと同じ塗り方をしている)
+
+    /// 点の画像の半径 (pt)
+    private static let dotRadius: CGFloat = 11.4
+
+    /// 点の画像 (通常 / 選択中)。最初に使うときに 1 回だけ作る。画面の 3 倍の細かさで作るので、貼ってもにじまない
+    private static let dotImages: (normal: Image, selected: Image) = {
+        func make(selected: Bool) -> Image {
+            let r = dotRadius
+            let fmt = UIGraphicsImageRendererFormat.default()
+            fmt.scale = 3
+            let ui = UIGraphicsImageRenderer(size: CGSize(width: r * 2, height: r * 2), format: fmt).image { _ in
+                // 輪 (外側の円 − 内側の円) を、半透明のまま重ねずに塗り分ける
+                func band(_ outer: CGFloat, _ inner: CGFloat, _ col: Color) {
+                    let p = UIBezierPath(ovalIn: CGRect(x: r - outer, y: r - outer, width: outer * 2, height: outer * 2))
+                    p.append(UIBezierPath(ovalIn: CGRect(x: r - inner, y: r - inner, width: inner * 2, height: inner * 2)))
+                    p.usesEvenOddFillRule = true
+                    UIColor(col).setFill()
+                    p.fill()
+                }
+                band(11.4, 7.8, selected ? Color.selDotOuter : Color.dotOuter)
+                band(7.8, 4.5, selected ? Color.selDotRing : Color.dotRing)
+                band(4.5, 0, selected ? Color.selDotCenter : Color.dotCenter)
+            }
+            return Image(uiImage: ui)
+        }
+        return (normal: make(selected: false), selected: make(selected: true))
+    }()
+
+    /// 点の画像を、points の位置に貼る。
+    /// ほぼ同じ位置 (3pt の格子で同じマス) に重なる点は 1 個だけ貼る (縮小表示で何百個も重なるときの無駄を省く)
+    private static func stampDots(_ c: inout GraphicsContext, _ points: [CGPoint], _ image: Image) {
+        if points.isEmpty { return }
+        let img = c.resolve(image)
+        let r = dotRadius
+        var seen = Set<Int>()
+        seen.reserveCapacity(points.count)
+        for p in points {
+            let gx = Int((p.x / 3).rounded(.down))
+            let gy = Int((p.y / 3).rounded(.down))
+            if !seen.insert(gx &* 4096 &+ gy).inserted { continue }
+            c.draw(img, in: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2))
+        }
+    }
+
     /// スライドの点: 外側の白い輪 (半径 11.25pt) → 水色の輪 → 中心の白 (本家の実測)
+    /// (今は使っていない。画像にする前の描き方。dotImages の絵と同じ形)
     private static func drawDot(_ c: inout GraphicsContext, _ p: CGPoint, selected: Bool) {
         let outer = selected ? Color.selDotOuter : Color.dotOuter
         let ring = selected ? Color.selDotRing : Color.dotRing
@@ -596,7 +644,6 @@ enum StripRenderer {
         let W = size.width
         let faceRect = CGRect(x: 0, y: faceTop, width: faceW, height: max(1, H - faceTop - faceBottomInset))
         c.fill(Path(faceRect), with: .color(faceColor))
-
         let beats = state.stripBeats
         let ppb = Double(H) / beats
         let center = H * 0.5
@@ -679,16 +726,14 @@ enum SeekRenderer {
     static let regionScale: CGFloat = 821.3 / 820.0
     /// 現在表示しているレーンの範囲 (白っぽい帯)。本家には無いので初期値は false (true にすると、これまでどおり出る)
     static let showViewWindow = false
-
     /// ヒストグラムの棒 (密度の計算は SeekDensity.swift)
     static let barColor = Color(red: 238.0 / 255.0, green: 102.0 / 255.0, blue: 100.0 / 255.0)
     static let barMaxW: CGFloat = 67.4        // 最大の長さ。右端 (W - 0.5) から、左の帯の側面の左端まで届く。1 段 (1/20) = 3.37pt
-    static let barHeightRatio: CGFloat = 0.789      // 棒の太さ = 1 本のピッチ (6.84pt) の 0.789 倍 = 5.4pt
-    static let barTopRatio: CGFloat = 0.02          // 棒の上端は、その区間の上端から ピッチの 0.02 倍 (0.14pt) 下
-
+    static let barHeightRatio: CGFloat = 0.789 // 棒の太さ = 1 本のピッチ (6.84pt) の 0.789 倍 = 5.4pt
+    static let barTopRatio: CGFloat = 0.02     // 棒の上端は、その区間の上端から ピッチの 0.02 倍 (0.14pt) 下
     /// 再生位置: 白い線 (太さ 2.3pt) の両端に、橙色の短い縦棒 (6 × 12.3pt)
     static let playLineH: CGFloat = 2.3
-    static let capW: CGFloat = 6             // 左の縦棒の幅 (右は 5.2pt。右端の枠線に少し重なるため)
+    static let capW: CGFloat = 6        // 左の縦棒の幅 (右は 5.2pt。右端の枠線に少し重なるため)
     static let capRightW: CGFloat = 5.2
     static let capH: CGFloat = 12.3
     static let capColor = Color(red: 251.0 / 255.0, green: 176.0 / 255.0, blue: 57.0 / 255.0)
@@ -717,7 +762,6 @@ enum SeekRenderer {
         func y(_ sec: Double) -> CGFloat { regionH - CGFloat(sec / total) * regionH }
         let x0 = ox + sideW        // 側面の右 (これより右が、シークバー本体)
         let right = W - 0.5        // 棒・再生位置の線の右端 (右の枠線の位置)
-
         // 側面に重なる部分を暗くするための矩形を、描きながら集める。
         // 本家は、側面が「黒 50%」の透明な面で、棒・再生位置の線は その下を通るので、側面の中だけ半分の明るさに見える
         var underSide: [CGRect] = []
@@ -735,7 +779,7 @@ enum SeekRenderer {
         let n = ratios.count
         if n > 0 {
             let pitch = regionH / CGFloat(n)
-            for j in 0..<n {                                  // j = 0 が曲の頭 (画面の下)
+            for j in 0..<n {                  // j = 0 が曲の頭 (画面の下)
                 let r = CGFloat(ratios[j])
                 if r <= 0 { continue }
                 let len = barMaxW * r
@@ -792,13 +836,13 @@ enum SeekRenderer {
 /// 本家の時刻表示: 細い字を広い字間 (1文字 20.25pt) で並べ、やわらかく光らせる。
 /// 上の時刻 (総時間) は画面の上端から、下の時刻 (現在時刻) は下端から、どちらも 113.5pt の位置が中心
 enum TimeLabelRenderer {
-    static let pitch: CGFloat = 20.25          // 1文字の送り幅 (「:」「.」も1文字ぶんの枠を取る)
-    static let centerX: CGFloat = 27.25        // 文字の中心 (このビューの左端から)。画面では 238pt
+    static let pitch: CGFloat = 20.25   // 1文字の送り幅 (「:」「.」も1文字ぶんの枠を取る)
+    static let centerX: CGFloat = 27.25 // 文字の中心 (このビューの左端から)。画面では 238pt
     static let edgeInset: CGFloat = 113.5
-    static let fontSize: CGFloat = 25.5        // 数字の高さ 約18pt
+    static let fontSize: CGFloat = 25.5 // 数字の高さ 約18pt
     static let dotSize: CGFloat = 3
-    static let upperDotY: CGFloat = -0.75      // 「:」の上の点 (文字の中心からの位置。下向きが +)
-    static let lowerDotY: CGFloat = 7.75       // 「:」の下の点 と 「.」 (文字の下端に接する)
+    static let upperDotY: CGFloat = -0.75 // 「:」の上の点 (文字の中心からの位置。下向きが +)
+    static let lowerDotY: CGFloat = 7.75  // 「:」の下の点 と 「.」 (文字の下端に接する)
 
     static func draw(ctx: GraphicsContext, size: CGSize, state: EditorState) {
         var c = ctx
@@ -816,7 +860,7 @@ enum TimeLabelRenderer {
     private static func vtext(_ ctx: GraphicsContext, _ s: String, centerY: CGFloat) {
         var cc = ctx
         cc.translateBy(x: centerX, y: centerY)
-        cc.rotate(by: .degrees(-90))        // 下から上へ読む。この座標では +x が上向き、+y が右向き (字の下向き)
+        cc.rotate(by: .degrees(-90)) // 下から上へ読む。この座標では +x が上向き、+y が右向き (字の下向き)
         cc.addFilter(.shadow(color: Color.white.opacity(0.85), radius: 2.5))
         let font = Font.system(size: fontSize, weight: .light)
         let chars = Array(s)
