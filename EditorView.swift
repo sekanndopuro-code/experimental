@@ -355,7 +355,7 @@ struct StripView: View {
                     Color.clear.frame(width: 1, height: compact ? 4 : 12.25)
                     ZoomButton(isPlus: true) { state.zoomIn() }
                     Text("Zoom " + state.zoomLabel)
-                        .font(.system(size: compact ? 14 : 10, design: .monospaced))
+                        .font(.system(size: compact ? 17 : 10, design: .monospaced))
                         .foregroundColor(Color.white.opacity(0.7))
                         .padding(.leading, 4)
                         .padding(.top, 3)
@@ -744,7 +744,7 @@ struct RightPanel: View {
             .overlay(alignment: .bottom) {
                 // 保存の状態 (オートセーブ)。下の2つのアイコンの上の余白に、小さく出す (レイアウトには影響しない)
                 Text(state.saveStatus)
-                    .font(.system(size: 9))
+                    .font(.system(size: compact ? 12 : 9))
                     .foregroundColor(Color.white.opacity(0.55))
                     .multilineTextAlignment(.center)
                     .frame(width: Self.width - 4)
@@ -1052,6 +1052,9 @@ struct EditorView: View {
             RightPanel(state: state)
         }
         .coordinateSpace(name: Self.rootSpace)
+        // Canvas 描画 (Renderers) は Environment を読めないので、コンパクト表示かどうかは state 経由でも渡す
+        .onAppear { state.compactLayout = compact }
+        .onChange(of: compact) { state.compactLayout = $0 }
         .background(EditorBackground(state: state))      // 背景画像 (無いときは黒)。ノーツ・レーン・帯は透明に描いて、これを透かす
         // SETTING の「タッチエフェクト」。画面 (UIWindow) に取り付けるので、置く場所はどこでもよい。
         // テストプレイが出ている間は外す (テストプレイが自分で同じものを出すので、二重になるのを避ける)
@@ -1270,7 +1273,7 @@ struct EditorView: View {
     private var toastLayer: some View {
         if let t = state.toast {
             Text(t)
-                .font(.system(size: 14))
+                .font(.system(size: compact ? 17 : 14))
                 .foregroundColor(.white)
                 .multilineTextAlignment(.center)
                 .lineLimit(5)

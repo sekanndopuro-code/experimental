@@ -96,27 +96,11 @@ struct LaneGeo {
     // (ビューの幅 873pt = 画面 1180 - 左の帯 145 - シークバーと時刻 104 - 右のボタン列 58)
     // 他の画面比率では、W (ビューの幅) だけが変わる (高さ 820pt の設計画面。DesignCanvas / EditorView.swift)。
     // 25.2 や 35.4 は、設計画面の上の寸法なので、画面比率によらず固定でよい
-    // 例外: iPhone 横画面のように W ÷ H が極端に大きいときは、trackCap で枠の幅に上限を付ける (下の trackCap)
-    /// レーンが極端に横長い画面 (iPhone 横画面など) での、枠 (トラック) の幅の上限。
-    /// iPhone ではレーンの幅 ÷ 高さ が 約1.8 になり (iPad では 約1.06)、上限が無いと
-    /// x: 0...255 がそのまま横に引き伸ばされて、ノーツの幅・スライドの傾き・座標が
-    /// iPad や本家とまったく違う見え方になっていた。
-    /// 上限は本家の枠の比率 (837.6 ÷ 820) を保つ値。iPad (W ÷ H が小さい) では nil = 制限なし
-    private var trackCap: CGFloat? {
-        (H > 0 && W / H > 1.4) ? H * (837.6 / 820.0) : nil
-    }
-
-    var trackL: CGFloat {
-        let natural = W - 35.4
-        guard let cap = trackCap, natural > cap else { return 25.2 }
-        // 上限で余った幅は左右に分けて、枠をレーンの中央に置く (左の余白を少し広く取るのは元と同じ)
-        return 25.2 + (natural - cap) / 2
-    }
-    var trackW: CGFloat {
-        let natural = max(10, W - 35.4)
-        if let cap = trackCap { return min(natural, cap) }
-        return natural
-    }
+    // ※ v1/v2 で「枠の幅に上限を付けて中央に寄せる」案 (trackCap) を入れたが、実機で
+    //   レーンが半分近くまで縮んで画面構成が崩れたため撤去した (2026-11-10、玲さんの実機確認)。
+    //   iPhone では枠はレーン幅いっぱい (元の仕様) が正解
+    var trackL: CGFloat { 25.2 }
+    var trackW: CGFloat { max(10, W - 35.4) }
     var playY: CGFloat { H * 0.9134 }     // 再生ライン (シアンの横棒)。本家は画面の高さの 91.3% (iPad Air 4 で 749 / 820pt)
 
     func px(_ x: Double) -> CGFloat { trackL + CGFloat(x / 255.0) * trackW }
@@ -156,6 +140,9 @@ final class EditorState: ObservableObject {
     /// FX 表示 (擬似テストプレイ)。ON のあいだ、レーンは seg の丸を消し、scroll / jump を反映して描く。編集はできない (見るだけ)。
     /// 保存はしない (開くたびに OFF)。切り替えは toggleFX() (EditorState+FX.swift)
     @Published var fxMode = false
+    /// コンパクト表示 (iPhone 横画面) か。EditorView が Environment (\.editorCompact) を受けて入れる。
+    /// Canvas 描画 (Renderers) は Environment を読めないので、文字の大きさなどはこちら経由で切り替える
+    @Published var compactLayout = false
     /// FX 表示で使う EffectMap の使い回し (effect / BPM が変わったときだけ作り直す。EditorState+FX.swift)
     var fxCache = EffectMap.none
     var fxKey: Int? = nil

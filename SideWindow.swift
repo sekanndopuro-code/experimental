@@ -34,17 +34,15 @@ extension EditorState {
 /// 開いていないときは、タッチを一切受けない (下のエディタにそのまま通る)。
 struct SidePanelLayer: View {
     @ObservedObject var state: EditorState
-    @Environment(\.editorCompact) private var compact
     @Environment(\.designScale) private var designScale
     @State private var keyboardHeight: CGFloat = 0
 
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
-            // コンパクト表示 (iPhone) では、ウィンドウを広めに取る (設計 445.5pt のままだと
-            // 実寸 約214pt しかなく、説明文が何行にも折れて入力欄を押し下げていた)
-            let width = compact ? min(700, size.width * 0.86)
-                                : min(SideWindow.width, size.width * 0.62)
+            // ウィンドウ幅は元の仕様のまま (v1/v2 でコンパクト時に広げる案を入れたが、
+            // 画面構成が大きく変わってしまったため撤去した。文字の拡大は PanelFont 側で効かせる)
+            let width = min(SideWindow.width, size.width * 0.62)
             let top = size.height * SideWindow.topRatio
             // キーボードが出ているあいだは、ウィンドウの下端をキーボードの上へ上げる (入力欄が隠れない)
             let bottom = keyboardHeight > 0 ? keyboardHeight + 8 : size.height * SideWindow.bottomRatio
