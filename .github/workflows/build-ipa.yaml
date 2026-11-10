@@ -1,0 +1,167 @@
+# MalodySlideEditor を GitHub の Mac で自動ビルドして、SideStore 用の ipa を作る設定ファイルです。
+# 場所: リポジトリの  .github/workflows/build-ipa.yml
+#
+# 動くタイミング:
+#   1) main ブランチに変更を保存(Commit)したとき  2) Actions タブの「Run workflow」ボタンを押したとき
+# 結果:
+#   リポジトリの Releases に「latest」が作られ、その中に MalodySlideEditor.ipa が入ります。
+#   (おまけ) 同じ Releases に MalodySlideEditor-simulator.zip も入ります。これは iPhone シミュレータ用で、
+#   https://appetize.io/upload にアップロードすると、ブラウザの中で iPhone として動かして見た目を確かめられます。
+#
+# ビルドの流れ: Rubber Band を取得 → アイコン用意 → XcodeGen で .xcodeproj を作る → xcodebuild archive → ipa にまとめる
+# アプリの設定 (Info.plist・アイコン・文書タイプなど) は、すべてリポジトリ直下の project.yml に書いてあります。
+
+name: ipaを作る
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write        # Releases に ipa を載せるために必要
+
+jobs:
+  build:
+    runs-on: macos-15    # GitHub が貸してくれる Mac (Xcode 入り)
+    timeout-minutes: 30
+
+    steps:
+      - name: ソースを取ってくる
+        uses: actions/checkout@v4
+
+      - name: Xcode のバージョンを表示
+        run: xcodebuild -version
+
+      # Rubber Band 本体を取得し、Swift から参照できる C++ モジュールを用意する。
+      - name: Rubber Band を取り込む
+        run: |
+          set -e
+          git clone --depth 1 --branch v4.0.0 https://github.com/breakfastquay/rubberband.git /tmp/rb
+          D=Vendor/CRubberBand
+          mkdir -p "$D/include"
+          cp -R /tmp/rb/src "$D/src"
+          cp -R /tmp/rb/rubberband "$D/rubberband"
+          cp -R /tmp/rb/single "$D/single"
+          cp /tmp/rb/COPYING "$D/COPYING"
+          cp /tmp/rb/rubberband/rubberband-c.h "$D/include/rubberband-c.h"
+          printf 'module CRubberBand {\n    header "rubberband-c.h"\n    export *\n}\n' > "$D/include/module.modulemap"
+
+      # リポジトリ直下の AppIcon-1024.png から、アイコン用のアセットカタログを作る。
+      - name: アプリアイコンを用意する
+        run: |
+          set -e
+          test -f AppIcon-1024.png || { echo "error: AppIcon-1024.png がリポジトリ直下にありません"; exit 1; }
+          D=Assets.xcassets/AppIcon.appiconset
+          mkdir -p "$D"
+          cp AppIcon-1024.png "$D/AppIcon-1024.png"
+          printf '{\n  "info" : {\n    "author" : "xcode",\n    "version" : 1\n  }\n}\n' > Assets.xcassets/Contents.json
+          printf '{\n  "images" : [\n    {\n      "filename" : "AppIcon-1024.png",\n      "idiom" : "universal",\n      "platform" : "ios",\n      "size" : "1024x1024"\n    }\n  ],\n  "info" : {\n    "author" : "xcode",\n    "version" : 1\n  }\n}\n' > "$D/Contents.json"
+          python3 -c "import json; json.load(open('$D/Contents.json')); print('Contents.json OK')"
+
+      - name: XcodeGen で Xcode プロジェクトを作る
+        run: |
+          set -e
+          brew install xcodegen
+          xcodegen --version
+          xcodegen generate
+          ls -la MalodySlideEditor.xcodeproj Generated
+
+      # Package.swift (Playgrounds 用) は読まれないよう、-project を明示している。
+      - name: ビルド (署名なし)
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project MalodySlideEditor.xcodeproj \
+            -scheme MalodySlideEditor \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/MalodySlideEditor.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            2>&1 | tee build.log
+
+      # archive の中に、アイコン入りの本物の .app ができている。それを Payload に入れて zip するだけ。
+      - name: .app を ipa にまとめる
+        run: |
+          APP=build/MalodySlideEditor.xcarchive/Products/Applications/MalodySlideEditor.app
+          if [ ! -d "$APP" ]; then
+            echo "error: .app が見つかりません: $APP" | tee -a build.log
+            find build -maxdepth 4 | tee -a build.log || true
+            exit 1
+          fi
+          rm -rf Payload MalodySlideEditor.ipa
+          mkdir Payload
+          cp -R "$APP" Payload/
+          echo "=== .app の中身 (Assets.car があればアイコン入り) ==="
+          ls Payload/MalodySlideEditor.app
+          plutil -lint Payload/MalodySlideEditor.app/Info.plist
+          plutil -p Payload/MalodySlideEditor.app/Info.plist | grep -E "CFBundleIcon|CFBundleDocumentTypes|UTImportedTypeDeclarations|MinimumOSVersion" || true
+          zip -qry MalodySlideEditor.ipa Payload
+          ls -lh MalodySlideEditor.ipa
+
+      # Appetize (ブラウザで動く iPhone シミュレータ) 用のビルド。実機用の ipa とは別物で、署名も要らない。
+      # ここが失敗しても ipa は作られる (continue-on-error)。失敗したときは、このステップのログに出る「error の行」を Claude に貼ってください。
+      - name: iPhone シミュレータ用にもビルド (Appetize 確認用)
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          if ! xcodebuild build \
+            -project MalodySlideEditor.xcodeproj \
+            -scheme MalodySlideEditor \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/sim \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            2>&1 | tee build-sim.log; then
+            echo "=== error の行 (シミュレータ版) ==="
+            grep -n "error:" build-sim.log | head -40 || true
+            echo "=== ログの最後 40 行 (シミュレータ版) ==="
+            tail -40 build-sim.log || true
+            exit 1
+          fi
+          APP=build/sim/Build/Products/Release-iphonesimulator/MalodySlideEditor.app
+          if [ ! -d "$APP" ]; then
+            echo "error: シミュレータ用の .app が見つかりません: $APP"
+            find build/sim -maxdepth 5 -name "*.app" || true
+            exit 1
+          fi
+          rm -f MalodySlideEditor-simulator.zip
+          # Appetize は「.app を 1 つ入れた zip」を受け取る (.app が zip の一番上にある形)
+          ditto -c -k --keepParent "$APP" MalodySlideEditor-simulator.zip
+          ls -lh MalodySlideEditor-simulator.zip
+
+      - name: Releases に載せる (ipa を直接ダウンロードできるようにする)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FILES="MalodySlideEditor.ipa"
+          # シミュレータ用の zip (Appetize 確認用) が作れていれば、いっしょに載せる
+          if [ -f MalodySlideEditor-simulator.zip ]; then
+            FILES="$FILES MalodySlideEditor-simulator.zip"
+          fi
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest $FILES \
+            --target "$GITHUB_SHA" \
+            --title "最新ビルド" \
+            --notes "MalodySlideEditor.ipa: SideStore で入れる用 (署名なし)。MalodySlideEditor-simulator.zip: Appetize で iPhone 表示を確かめる用。"
+
+      - name: ipa を Actions の成果物としても保存 (予備)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MalodySlideEditor-ipa
+          path: MalodySlideEditor.ipa
+
+      # 失敗したときだけ動く。ここに出る文章を、そのままコピーして Claude に貼ってください
+      - name: 失敗したときの要点
+        if: failure()
+        run: |
+          echo "=== error の行 ==="
+          grep -n "error:" build.log | head -40 || true
+          echo "=== ログの最後 40 行 ==="
+          tail -40 build.log || true
