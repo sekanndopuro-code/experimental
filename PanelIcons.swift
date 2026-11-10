@@ -189,10 +189,17 @@ extension Color {
 /// 幅と高さの比が近い、iPad 標準の字体で代用している。字体を変えたいときは、ここの名前だけ変えればよい
 /// (本家の字体ファイルを Playgrounds に入れた場合も、ここに名前を書けば全部に効く)。
 enum PanelFont {
+    // 拡大率 (boost) は、各ビューが Environment (\.panelFontBoost) から読んで引数で渡す。
+    // 以前は static 変数に入れていたが、static 変数は SwiftUI の再描画の対象にならないので、
+    // 拡大が効くのが「最初に描かれたあと、たまたま再描画された所から」になっていた。
+    // DesignCanvas が倍率を見て Environment に入れる (iPad では 1 = これまでどおり)。
+    // 設計画面の文字は倍率ぶん縮むので (iPhone 16 では ×0.48)、
+    // PanelFont を使う文字だけでも実寸に近づけるための応急処置
+
     /// 再生速度 / 分割のメニューの数字 (本家: 1/32 や 0.75x)
-    static func menu(_ size: CGFloat) -> Font { Font.custom("DINCondensed-Bold", size: size) }
+    static func menu(_ size: CGFloat, boost: CGFloat = 1) -> Font { Font.custom("DINCondensed-Bold", size: size * boost) }
     /// EDIT 中のアイコンの左に出る名前 (本家: Back / Note / Wipe ...)
-    static func label(_ size: CGFloat) -> Font { Font.custom("AvenirNextCondensed-Medium", size: size) }
+    static func label(_ size: CGFloat, boost: CGFloat = 1) -> Font { Font.custom("AvenirNextCondensed-Medium", size: size * boost) }
 }
 
 /// 左右が尖った (上下が平らな) 正六角形。本家の再生ボタンの形
@@ -275,10 +282,11 @@ extension AnyTransition {
 /// EDIT 中、アイコンの左に出る名前。本家は、黒い半透明の箱 (黒 80%、高さ 43pt) の上に白い字
 struct PanelEditLabel: View {
     let text: String
+    @Environment(\.panelFontBoost) private var fontBoost
 
     var body: some View {
         Text(text)
-            .font(PanelFont.label(25))
+            .font(PanelFont.label(25, boost: fontBoost))
             .foregroundColor(.white)
             .lineLimit(1)
             .fixedSize()
