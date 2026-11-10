@@ -4,7 +4,9 @@ import SwiftUI
 struct MalodySlideEditorApp: App {
     var body: some Scene {
         WindowGroup {
-            RootView()
+            // iPad のとき「iPhone表示」を選んでいれば、iPhone と同じ大きさの枠に入れる (PhonePreview.swift)。
+            // 選んでいなければ、中身 (RootView) をそのまま出すだけで、何も変わらない
+            PhonePreviewHost { RootView() }
                 .preferredColorScheme(.dark)
                 .statusBarHidden(true)
                 // ホームバーは隠さない (隠すと、下端に触れた瞬間に白く出て反応してしまう)。

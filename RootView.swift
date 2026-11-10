@@ -55,6 +55,10 @@ struct RootView: View {
     @State private var busy = false
     @State private var message = ""
 
+    // iPad の上で iPhone 横画面の見た目を確かめる設定 (PhonePreview.swift)。アプリ全体を包む側と同じ値を読み書きする
+    @AppStorage(PhonePreview.deviceKey) private var phoneDevice = PhonePreviewDevice.off.rawValue
+    @AppStorage(PhonePreview.realSizeKey) private var phoneRealSize = false
+
     var body: some View {
         ZStack {
             if let st = editor {
@@ -97,7 +101,20 @@ struct RootView: View {
         }
     }
 
+    /// 起動画面。iPhone の横画面は高さが 375〜440pt しかなく、縦に並べた中身が入りきらないので、
+    /// 収まらないときだけ縦にスクロールできるようにしてある (収まるときは、これまでどおり真ん中に並ぶ)
     private var importView: some View {
+        GeometryReader { geo in
+            ScrollView(.vertical, showsIndicators: false) {
+                importContent
+                    .padding(30)
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height)
+            }
+        }
+        .background(Color.black)
+    }
+
+    private var importContent: some View {
         VStack(spacing: 18) {
             Text("Malody Slide Editor")
                 .font(.system(size: 30, weight: .bold, design: .monospaced))
@@ -151,10 +168,70 @@ struct RootView: View {
                     .frame(maxWidth: 520)
                     .multilineTextAlignment(.center)
             }
+
+            devTools
         }
-        .padding(30)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
+    }
+
+    /// 見た目の確認用 (デモ譜面・iPhone 表示プレビュー)
+    private var devTools: some View {
+        VStack(spacing: 10) {
+            Divider().frame(maxWidth: 360)
+            Text("確認用")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            // ファイルなしで、エディタをすぐ開く (音源なし・保存先は一時フォルダ)
+            Button {
+                openDemo()
+            } label: {
+                Label("デモ譜面で開く", systemImage: "wand.and.stars")
+            }
+            .buttonStyle(.bordered)
+            .disabled(busy)
+
+            // iPad の中に iPhone と同じ大きさの枠を作って、iPhone での見え方を確かめる (iPad のときだけ出す)
+            if PhonePreview.isAvailable {
+                Menu {
+                    Picker("iPhone表示", selection: $phoneDevice) {
+                        ForEach(PhonePreviewDevice.allCases) { d in
+                            Text(d.label).tag(d.rawValue)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    Toggle("実寸に近づける (×0.86)", isOn: $phoneRealSize)
+                } label: {
+                    Label("iPhone表示: " + (PhonePreviewDevice(rawValue: phoneDevice)?.label ?? "オフ"),
+                          systemImage: "iphone.landscape")
+                }
+                .buttonStyle(.bordered)
+                Text("切り替えると、選んだファイルはいったん外れます")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    /// デモ譜面を一時フォルダに書き出して、そのままエディタを開く
+    private func openDemo() {
+        do {
+            let url = try DemoChart.writeToTemp()
+            if mcScoped, let old = mcURL {
+                old.stopAccessingSecurityScopedResource() // 前に選んでいた mc のアクセス権を閉じる
+            }
+            mcURL = url
+            mcScoped = false // アプリ内のファイルなので、アクセス権は要らない
+            mcData = try Data(contentsOf: url)
+            mcName = url.lastPathComponent
+            oggData = nil
+            oggName = ""
+            bgData = nil
+            bgName = ""
+            openEditor()
+        } catch {
+            message = "デモ譜面を作れませんでした: \(error.localizedDescription)"
+        }
     }
 
     /// 読み込み状況の表示だけ (選ぶのは上の「ファイルを選択…」ボタン)
