@@ -1085,9 +1085,10 @@ struct EditorView: View {
         }
     }
 
-    /// Adv. メニューの今の幅 (EDIT 中に開いているときだけ。閉じているときは 0)
+    /// Adv. メニューの今の幅 (EDIT 中に開いているときだけ。閉じているときは 0)。
+    /// 幅そのものは SETTING で変えられる (state.advPanelWidth、初期値 196)
     private var advWidth: CGFloat {
-        (state.editing && state.advOpen) ? AdvPanel.width : 0
+        (state.editing && state.advOpen) ? CGFloat(state.advPanelWidth) : 0
     }
 
     /// Grid settings のダイアログ。シートと違って、下からせり上がる動きがなく、押した瞬間に出る

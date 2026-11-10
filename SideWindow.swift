@@ -478,7 +478,7 @@ private struct EffectWindowContent: View {
                     Text(kind == .scroll
                          ? "scroll: その拍から、譜面の流れる速さが 値 倍になります (1 = 普通 / 0 = 止まる / マイナス = 逆走)。"
                          : "jump: その拍になった瞬間、譜面が先へ一気に飛びます。値は ms で、1000 = 1 秒間に進む距離ぶん (そのときの scroll の値に比例: scroll 0 なら飛ばず、2 なら 2 倍飛びます)。")
-                        .font(.system(size: 11))
+                        .font(.system(size: 11 * state.smallTextBoost))
                         .foregroundColor(Color.white.opacity(0.55))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -591,7 +591,7 @@ private struct InformationWindowContent: View {
                     }
                 }
                 Text(audioInfo)
-                    .font(.system(size: 11))
+                    .font(.system(size: 11 * state.smallTextBoost))
                     .foregroundColor(Color.white.opacity(0.55))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -724,7 +724,11 @@ private struct SettingWindowContent: View {
                     holdRow
                     SideDivider()
                     touchEffectRow
-                    playInfoText
+                    Group {
+                        SideDivider()
+                        displayRows
+                        playInfoText
+                    }
                 }
                 .padding(.top, 8)
                 .padding(.bottom, 35)
@@ -817,7 +821,7 @@ private struct SettingWindowContent: View {
     private var playInfoText: some View {
         if !state.playInfo.isEmpty {
             Text(state.playInfo)
-                .font(.system(size: 11, design: .monospaced))
+                .font(.system(size: 11 * state.smallTextBoost, design: .monospaced))
                 .foregroundColor(Color.laneCyan.opacity(0.8))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -829,7 +833,7 @@ private struct SettingWindowContent: View {
 
     private func note(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11))
+            .font(.system(size: 11 * state.smallTextBoost))
             .foregroundColor(Color.white.opacity(0.55))
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
@@ -871,6 +875,25 @@ private struct SettingWindowContent: View {
         checkRow(title: "タッチエフェクト",
                  note: "オンにすると、画面に触れた所に白い輪が広がって消え、触れている間は赤い半透明の丸が指についてきます (テストプレイと同じ見た目)。レーン・左の帯・シークバー・右のボタンなど、エディタのどこを触っても出ます。操作の邪魔はしません。テストプレイ中は、これまでどおりテストプレイ側の表示です。",
                  isOn: $state.touchEffect)
+    }
+
+    /// 表示の調整 (主に iPhone 向け): 小さい文字の拡大率 / Adv. メニューの幅 / ノーツの切り取り。どれも保存される
+    private var displayRows: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sliderRow(title: "小さい文字の大きさ", text: percent(state.smallTextScale),
+                      value: $state.smallTextScale, range: EditorState.smallTextScaleRange, step: 0.05,
+                      onEditingChanged: nil)
+            note("SETTING の説明文や Adv. メニューの文字など、小さく書かれた文字の拡大率です (iPhone 表示のときだけ効きます)。")
+            SideDivider()
+            sliderRow(title: "プラグインメニューの幅", text: "\(Int(state.advPanelWidth))pt",
+                      value: $state.advPanelWidth, range: EditorState.advPanelWidthRange, step: 4,
+                      onEditingChanged: nil)
+            note("Adv. (λ) を開いたときのメニューの幅です。広げるぶん、レーンは細くなります。")
+            SideDivider()
+            checkRow(title: "ノーツをレーンの枠で切り取る (表示のみ)",
+                     note: "オンにすると、レーンの枠 (x: 0〜255) からはみ出して描かれるノーツを、枠の端で切って描きます。譜面データは変わりません。はみ出しが譜面データ側の問題かどうかを切り分けるための確認用です。",
+                     isOn: $state.clipNotesToTrack)
+        }
     }
 
     /// 白い縁取りの四角 (BPM / Effect の入力欄と同じ線) のチェックボックス。オンのときは水色のチェック
